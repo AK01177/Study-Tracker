@@ -319,6 +319,7 @@
             if (user){
                 window.userId = user.uid;
                 console.log("Logged in:", user.email);
+                document.getElementById("loginBtn").style.display = "none";
                 init();
             }
         });
@@ -328,3 +329,4 @@
     <script type="module" src="script.js"></script>
 </body>
 </html>
+
