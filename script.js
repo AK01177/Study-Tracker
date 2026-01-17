@@ -1,7 +1,9 @@
 import {
   doc,
   setDoc,
-  getDoc
+  getDoc,
+  collection,
+  query
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import {
@@ -2450,129 +2452,140 @@ function showSaveIndicator() {
 let historyFilterStart = null;
 let historyFilterEnd = null;
 
-window.showHistory = function() {
-    const historyGrid = document.getElementById('historyGrid');
-    const historyStats = document.getElementById('historyStats');
-    
-    if (!historyGrid) return;
-    
-    historyGrid.innerHTML = '<p>Loading history...</p>';
-    
-    try {
-        const keys = [];
-        const entries = [];
-        
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('study_')) {
-                try {
-                    const stored = localStorage.getItem(key);
-                    if (!stored) continue;
-                    
-                    const data = JSON.parse(stored);
-                    const date = key.replace('study_', '');
-                    const dateObj = new Date(date + 'T00:00:00');
-                    if (isNaN(dateObj.getTime())) continue;
-                    
-                    // Apply date filter
-                    if (historyFilterStart && dateObj < new Date(historyFilterStart + 'T00:00:00')) continue;
-                    if (historyFilterEnd && dateObj > new Date(historyFilterEnd + 'T23:59:59')) continue;
-                    
-                    const dayName = dateObj.toLocaleDateString('en-US', {weekday: 'long'});
-                    const slots = Object.values(data.slots || {});
-                    const attended = slots.filter(s => s.attendance === 'present').length;
-                    const total = slots.filter(s => s.attendance).length;
-                    const selfStudy = slots.reduce((sum, s) => sum + (parseFloat(s.selfStudyHours) || 0), 0);
-                    const pythonHours = (parseFloat(data.pythonDuration) || 0) / 60;
-                    const dsaHours = (parseFloat(data.dsaDuration) || 0) / 60;
-                    const totalStudy = selfStudy + pythonHours + dsaHours;
-                    const attendanceRate = total > 0 ? Math.round((attended / total) * 100) : 0;
-                    
-                    entries.push({
-                        date,
-                        dateObj,
-                        dayName,
-                        data,
-                        attended,
-                        total,
-                        selfStudy,
-                        pythonHours,
-                        dsaHours,
-                        totalStudy,
-                        attendanceRate
-                    });
-                } catch (e) {
-                    console.error('Error parsing', key, e);
-                }
-            }
-        }
-        
-        if (entries.length === 0) {
-            historyGrid.innerHTML = '<p>No history found for the selected filter. Try adjusting your date range or clear filters.</p>';
-            if (historyStats) historyStats.style.display = 'none';
-            return;
-        }
-        
-        // Sort entries
-        const sortBy = document.getElementById('historySort')?.value || 'newest';
-        entries.sort((a, b) => {
-            switch(sortBy) {
-                case 'oldest':
-                    return a.dateObj - b.dateObj;
-                case 'hours':
-                    return b.totalStudy - a.totalStudy;
-                case 'attendance':
-                    return b.attendanceRate - a.attendanceRate;
-                case 'newest':
-                default:
-                    return b.dateObj - a.dateObj;
-            }
-        });
-        
-        // Calculate statistics
-        const totalDays = entries.length;
-        const avgStudyHours = entries.reduce((sum, e) => sum + e.totalStudy, 0) / totalDays;
-        const avgAttendance = entries.reduce((sum, e) => sum + e.attendanceRate, 0) / totalDays;
-        const totalStudyHours = entries.reduce((sum, e) => sum + e.totalStudy, 0);
-        
-        if (historyStats) {
-            historyStats.innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                    <div><strong>Total Days Tracked:</strong> ${totalDays}</div>
-                    <div><strong>Average Study Hours/Day:</strong> ${avgStudyHours.toFixed(1)}h</div>
-                    <div><strong>Average Attendance:</strong> ${avgAttendance.toFixed(1)}%</div>
-                    <div><strong>Total Study Hours:</strong> ${totalStudyHours.toFixed(1)}h</div>
-                </div>
-            `;
-            historyStats.style.display = 'block';
-        }
-        
-        let html = '';
-        
-        for (const entry of entries.slice(0, 100)) {
-            html += `
-                <div class="history-item" style="cursor: pointer;" onclick="loadHistoryDay('${entry.date}')">
-                    <div class="history-date">${entry.dayName}, ${entry.dateObj.toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'})}</div>
-                    <div class="history-summary">
-                        <strong>Attendance:</strong> ${entry.attended}/${entry.total} classes (${entry.attendanceRate}%)<br>
-                        <strong>Self Study:</strong> ${entry.selfStudy.toFixed(1)} hours<br>
-                        <strong>Python/DSA:</strong> ${(entry.pythonHours + entry.dsaHours).toFixed(1)} hours<br>
-                        <strong>Total Study:</strong> ${entry.totalStudy.toFixed(1)} hours<br>
-                        ${entry.data.pythonTopics ? `<strong>Python Topics:</strong> ${entry.data.pythonTopics.substring(0, 60)}${entry.data.pythonTopics.length > 60 ? '...' : ''}<br>` : ''}
-                        ${entry.data.dsaTopics ? `<strong>DSA Topics:</strong> ${entry.data.dsaTopics.substring(0, 60)}${entry.data.dsaTopics.length > 60 ? '...' : ''}<br>` : ''}
-                        ${entry.data.keyLearnings ? `<strong>Key Learning:</strong> ${entry.data.keyLearnings.substring(0, 80)}${entry.data.keyLearnings.length > 80 ? '...' : ''}<br>` : ''}
-                        <button class="btn btn-secondary" style="margin-top: 10px; padding: 8px 15px; font-size: 14px;" onclick="event.stopPropagation(); loadHistoryDay('${entry.date}')">View & Edit Details</button>
-                    </div>
-                </div>
-            `;
-        }
-        
-        historyGrid.innerHTML = html || '<p>No history data available.</p>';
-    } catch (error) {
-        historyGrid.innerHTML = '<p>Error loading history: ' + error.message + '</p>';
-        if (historyStats) historyStats.style.display = 'none';
+window.showHistory = async function () {
+  const historyGrid = document.getElementById('historyGrid');
+  const historyStats = document.getElementById('historyStats');
+
+  if (!historyGrid) return;
+
+  historyGrid.innerHTML = '<p>Loading history...</p>';
+
+  try {
+    const entries = [];
+
+    // 🔥 FETCH ALL DAYS FROM FIREBASE
+    const daysRef = collection(db, "users", userId, "days");
+    const snapshot = await getDocs(daysRef);
+
+    snapshot.forEach(docSnap => {
+      const date = docSnap.id; // YYYY-MM-DD
+      const data = docSnap.data();
+
+      const dateObj = new Date(date + 'T00:00:00');
+      if (isNaN(dateObj.getTime())) return;
+
+      // 🔍 Apply date filters
+      if (historyFilterStart && dateObj < new Date(historyFilterStart + 'T00:00:00')) return;
+      if (historyFilterEnd && dateObj > new Date(historyFilterEnd + 'T23:59:59')) return;
+
+      const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+
+      const slots = Object.values(data.slots || {});
+      const attended = slots.filter(s => s.attendance === 'present').length;
+      const total = slots.filter(s => s.attendance).length;
+      const selfStudy = slots.reduce((sum, s) => sum + (parseFloat(s.selfStudyHours) || 0), 0);
+      const pythonHours = (parseFloat(data.pythonDuration) || 0) / 60;
+      const dsaHours = (parseFloat(data.dsaDuration) || 0) / 60;
+      const totalStudy = selfStudy + pythonHours + dsaHours;
+      const attendanceRate = total > 0 ? Math.round((attended / total) * 100) : 0;
+
+      entries.push({
+        date,
+        dateObj,
+        dayName,
+        data,
+        attended,
+        total,
+        selfStudy,
+        pythonHours,
+        dsaHours,
+        totalStudy,
+        attendanceRate
+      });
+    });
+
+    // ❌ No data
+    if (entries.length === 0) {
+      historyGrid.innerHTML =
+        '<p>No history found for the selected filter. Try adjusting your date range or clear filters.</p>';
+      if (historyStats) historyStats.style.display = 'none';
+      return;
     }
-}
+
+    // 🔃 Sorting
+    const sortBy = document.getElementById('historySort')?.value || 'newest';
+    entries.sort((a, b) => {
+      switch (sortBy) {
+        case 'oldest':
+          return a.dateObj - b.dateObj;
+        case 'hours':
+          return b.totalStudy - a.totalStudy;
+        case 'attendance':
+          return b.attendanceRate - a.attendanceRate;
+        case 'newest':
+        default:
+          return b.dateObj - a.dateObj;
+      }
+    });
+
+    // 📊 Statistics
+    const totalDays = entries.length;
+    const avgStudyHours = entries.reduce((sum, e) => sum + e.totalStudy, 0) / totalDays;
+    const avgAttendance = entries.reduce((sum, e) => sum + e.attendanceRate, 0) / totalDays;
+    const totalStudyHours = entries.reduce((sum, e) => sum + e.totalStudy, 0);
+
+    if (historyStats) {
+      historyStats.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+          <div><strong>Total Days Tracked:</strong> ${totalDays}</div>
+          <div><strong>Average Study Hours/Day:</strong> ${avgStudyHours.toFixed(1)}h</div>
+          <div><strong>Average Attendance:</strong> ${avgAttendance.toFixed(1)}%</div>
+          <div><strong>Total Study Hours:</strong> ${totalStudyHours.toFixed(1)}h</div>
+        </div>
+      `;
+      historyStats.style.display = 'block';
+    }
+
+    // 🧱 Render cards
+    let html = '';
+
+    for (const entry of entries.slice(0, 100)) {
+      html += `
+        <div class="history-item" style="cursor: pointer;" onclick="loadHistoryDay('${entry.date}')">
+          <div class="history-date">
+            ${entry.dayName}, ${entry.dateObj.toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric'
+            })}
+          </div>
+          <div class="history-summary">
+            <strong>Attendance:</strong> ${entry.attended}/${entry.total} classes (${entry.attendanceRate}%)<br>
+            <strong>Self Study:</strong> ${entry.selfStudy.toFixed(1)} hours<br>
+            <strong>Python/DSA:</strong> ${(entry.pythonHours + entry.dsaHours).toFixed(1)} hours<br>
+            <strong>Total Study:</strong> ${entry.totalStudy.toFixed(1)} hours<br>
+            ${entry.data.pythonTopics ? `<strong>Python Topics:</strong> ${entry.data.pythonTopics.substring(0, 60)}${entry.data.pythonTopics.length > 60 ? '...' : ''}<br>` : ''}
+            ${entry.data.dsaTopics ? `<strong>DSA Topics:</strong> ${entry.data.dsaTopics.substring(0, 60)}${entry.data.dsaTopics.length > 60 ? '...' : ''}<br>` : ''}
+            ${entry.data.keyLearnings ? `<strong>Key Learning:</strong> ${entry.data.keyLearnings.substring(0, 80)}${entry.data.keyLearnings.length > 80 ? '...' : ''}<br>` : ''}
+            <button class="btn btn-secondary"
+              style="margin-top: 10px; padding: 8px 15px; font-size: 14px;"
+              onclick="event.stopPropagation(); loadHistoryDay('${entry.date}')">
+              View & Edit Details
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    historyGrid.innerHTML = html || '<p>No history data available.</p>';
+
+  } catch (error) {
+    console.error(error);
+    historyGrid.innerHTML = '<p>Error loading history.</p>';
+    if (historyStats) historyStats.style.display = 'none';
+  }
+};
+
 
 window.applyHistoryFilter = function() {
     historyFilterStart = document.getElementById('historyFilterStart')?.value || null;
@@ -2588,19 +2601,25 @@ window.clearHistoryFilter = function() {
     showHistory();
 }
 
-window.loadHistoryDay = function(date, event) {
-    if (event) {
-        event.stopPropagation();
-        event.preventDefault();
-    }
-    document.getElementById('dateInput').value = date;
-    // Switch to daily tab
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.nav-tab')[0].classList.add('active');
-    document.getElementById('dailyTab').classList.add('active');
-    loadDay();
-}
+window.loadHistoryDay = async function (date, event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+
+  // Set date input
+  document.getElementById('dateInput').value = date;
+
+  // Switch to daily tab
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-tab')[0].classList.add('active');
+  document.getElementById('dailyTab').classList.add('active');
+
+  // 🔥 IMPORTANT: await Firebase load
+  await loadDay();
+};
+
 
 window.exportData = function() {
     try {
@@ -2872,6 +2891,7 @@ window.verifyOTP = async function () {
 
 
 init();
+
 
 
 
