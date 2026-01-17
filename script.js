@@ -3,7 +3,9 @@ import {
   setDoc,
   getDoc,
   collection,
-  query
+  query,
+  getDocs,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import {
@@ -157,13 +159,19 @@ window.loadGoals = async function () {
 };
 
 
-function saveGoals() {
-    try {
-        localStorage.setItem('study_goals', JSON.stringify(studyGoals));
-    } catch (error) {
-        console.error('Failed to save goals:', error);
-    }
-}
+window.saveGoals = async function () {
+  try {
+    if (!window.userId) return;
+
+    await setDoc(
+      doc(db, "users", userId, "meta", "goals"),
+      studyGoals
+    );
+  } catch (error) {
+    console.error("Failed to save goals to Firebase:", error);
+  }
+};
+
 
 // Load and save cancellation data
 window.loadCancelledData = async function () {
@@ -751,74 +759,87 @@ window.exportTodos = function() {
 }
 
 // Calculate attendance streak
-function calculateAttendanceStreak() {
-    let streak = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    for (let i = 0; i < 100; i++) {
-        const checkDate = new Date(today);
-        checkDate.setDate(checkDate.getDate() - i);
-        const dateStr = checkDate.toISOString().split('T')[0];
-        const storageKey = `study_${dateStr}`;
-        const stored = localStorage.getItem(storageKey);
-        
-        if (!stored) break;
-        
-        try {
-            const data = JSON.parse(stored);
-            const slots = Object.values(data.slots || {});
-            const attended = slots.filter(s => s.attendance === 'present').length;
-            const total = slots.filter(s => s.attendance).length;
-            
-            if (total > 0 && attended === total) {
-                streak++;
-            } else {
-                break;
-            }
-        } catch (e) {
-            break;
-        }
+window.calculateAttendanceStreak = async function () {
+  let streak = 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < 100; i++) {
+    const checkDate = new Date(today);
+    checkDate.setDate(checkDate.getDate() - i);
+
+    const dateStr = checkDate.toISOString().split('T')[0];
+
+    try {
+      const ref = doc(db, "users", userId, "days", dateStr);
+      const snap = await getDoc(ref);
+
+      // ❌ No data → streak broken
+      if (!snap.exists()) break;
+
+      const data = snap.data();
+      const slots = Object.values(data.slots || {});
+      const attended = slots.filter(s => s.attendance === 'present').length;
+      const total = slots.filter(s => s.attendance).length;
+
+      if (total > 0 && attended === total) {
+        streak++;
+      } else {
+        break;
+      }
+    } catch (error) {
+      break;
     }
-    
-    return streak;
-}
+  }
+
+  return streak;
+};
+
 
 // Calculate study streak (consecutive days with study hours > 0)
-function calculateStudyStreak() {
-    let streak = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    for (let i = 0; i < 100; i++) {
-        const checkDate = new Date(today);
-        checkDate.setDate(checkDate.getDate() - i);
-        const dateStr = checkDate.toISOString().split('T')[0];
-        const storageKey = `study_${dateStr}`;
-        const stored = localStorage.getItem(storageKey);
-        
-        if (!stored) break;
-        
-        try {
-            const data = JSON.parse(stored);
-            const slots = Object.values(data.slots || {});
-            const selfStudy = slots.reduce((sum, s) => sum + (parseFloat(s.selfStudyHours) || 0), 0);
-            const pythonHours = (parseFloat(data.pythonDuration) || 0) / 60;
-            const dsaHours = (parseFloat(data.dsaDuration) || 0) / 60;
-            const totalStudy = selfStudy + pythonHours + dsaHours;
-            
-            if (totalStudy > 0) {
-                streak++;
-            } else {
-                break;
-            }
-        } catch (e) {
-            break;
-        }
+window.calculateStudyStreak = async function () {
+  let streak = 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < 100; i++) {
+    const checkDate = new Date(today);
+    checkDate.setDate(checkDate.getDate() - i);
+
+    const dateStr = checkDate.toISOString().split('T')[0];
+
+    try {
+      const ref = doc(db, "users", userId, "days", dateStr);
+      const snap = await getDoc(ref);
+
+      // ❌ No data → streak broken
+      if (!snap.exists()) break;
+
+      const data = snap.data();
+      const slots = Object.values(data.slots || {});
+      const selfStudy = slots.reduce(
+        (sum, s) => sum + (parseFloat(s.selfStudyHours) || 0),
+        0
+      );
+      const pythonHours = (parseFloat(data.pythonDuration) || 0) / 60;
+      const dsaHours = (parseFloat(data.dsaDuration) || 0) / 60;
+      const totalStudy = selfStudy + pythonHours + dsaHours;
+
+      if (totalStudy > 0) {
+        streak++;
+      } else {
+        break;
+      }
+    } catch (error) {
+      break;
     }
-    
-    return streak;
-}
+  }
+
+  return streak;
+};
+
 
 // Get pending assignments count
 function getPendingAssignmentsCount() {
@@ -967,187 +988,235 @@ function updateTimerDisplay() {
 }
 
 // Get weekly statistics
-function getWeeklyStats() {
-    const today = new Date();
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - today.getDay() + 1); // Monday
-    weekStart.setHours(0, 0, 0, 0);
-    
-    let totalStudyHours = 0;
-    let totalAttendance = 0;
-    let totalClasses = 0;
-    let daysTracked = 0;
-    
-    for (let i = 0; i < 7; i++) {
-        const checkDate = new Date(weekStart);
-        checkDate.setDate(weekStart.getDate() + i);
-        const dateStr = checkDate.toISOString().split('T')[0];
-        const storageKey = `study_${dateStr}`;
-        const stored = localStorage.getItem(storageKey);
-        
-        if (stored) {
-            try {
-                const data = JSON.parse(stored);
-                daysTracked++;
-                
-                const slots = Object.values(data.slots || {});
-                const selfStudy = slots.reduce((sum, s) => sum + (parseFloat(s.selfStudyHours) || 0), 0);
-                const pythonHours = (parseFloat(data.pythonDuration) || 0) / 60;
-                const dsaHours = (parseFloat(data.dsaDuration) || 0) / 60;
-                totalStudyHours += selfStudy + pythonHours + dsaHours;
-                
-                const attended = slots.filter(s => s.attendance === 'present').length;
-                const total = slots.filter(s => s.attendance).length;
-                totalAttendance += attended;
-                totalClasses += total;
-            } catch (e) {
-                // Skip invalid entries
-            }
-        }
+window.getWeeklyStats = async function () {
+  const today = new Date();
+  const weekStart = new Date(today);
+
+  // Monday as start of week
+  weekStart.setDate(today.getDate() - today.getDay() + 1);
+  weekStart.setHours(0, 0, 0, 0);
+
+  let totalStudyHours = 0;
+  let totalAttendance = 0;
+  let totalClasses = 0;
+  let daysTracked = 0;
+
+  for (let i = 0; i < 7; i++) {
+    const checkDate = new Date(weekStart);
+    checkDate.setDate(weekStart.getDate() + i);
+
+    const dateStr = checkDate.toISOString().split("T")[0];
+
+    try {
+      const ref = doc(db, "users", userId, "days", dateStr);
+      const snap = await getDoc(ref);
+
+      if (!snap.exists()) continue;
+
+      const data = snap.data();
+      daysTracked++;
+
+      const slots = Object.values(data.slots || {});
+      const selfStudy = slots.reduce(
+        (sum, s) => sum + (parseFloat(s.selfStudyHours) || 0),
+        0
+      );
+      const pythonHours = (parseFloat(data.pythonDuration) || 0) / 60;
+      const dsaHours = (parseFloat(data.dsaDuration) || 0) / 60;
+
+      totalStudyHours += selfStudy + pythonHours + dsaHours;
+
+      const attended = slots.filter(s => s.attendance === "present").length;
+      const total = slots.filter(s => s.attendance).length;
+
+      totalAttendance += attended;
+      totalClasses += total;
+
+    } catch (error) {
+      // skip broken day
     }
-    
-    return {
-        studyHours: totalStudyHours,
-        attendanceRate: totalClasses > 0 ? Math.round((totalAttendance / totalClasses) * 100) : 0,
-        daysTracked
-    };
-}
+  }
+
+  return {
+    studyHours: totalStudyHours,
+    attendanceRate:
+      totalClasses > 0
+        ? Math.round((totalAttendance / totalClasses) * 100)
+        : 0,
+    daysTracked
+  };
+};
+
 
 // Search functionality
-function searchContent(query) {
-    if (!query || query.trim().length === 0) return [];
-    
-    const results = [];
-    const searchLower = query.toLowerCase();
-    
-    // Search in daily entries
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('study_')) {
-            try {
-                const data = JSON.parse(localStorage.getItem(key));
-                const date = key.replace('study_', '');
-                
-                // Search in topics, notes, learnings
-                if (data.pythonTopics && data.pythonTopics.toLowerCase().includes(searchLower)) {
-                    results.push({ type: 'Python Topics', date, content: data.pythonTopics.substring(0, 100) });
-                }
-                if (data.dsaTopics && data.dsaTopics.toLowerCase().includes(searchLower)) {
-                    results.push({ type: 'DSA Topics', date, content: data.dsaTopics.substring(0, 100) });
-                }
-                if (data.keyLearnings && data.keyLearnings.toLowerCase().includes(searchLower)) {
-                    results.push({ type: 'Key Learnings', date, content: data.keyLearnings.substring(0, 100) });
-                }
-                
-                // Search in slots
-                Object.values(data.slots || {}).forEach(slot => {
-                    if (slot.topics && slot.topics.toLowerCase().includes(searchLower)) {
-                        results.push({ type: 'Lecture Topics', date, content: slot.topics.substring(0, 100) });
-                    }
-                });
-            } catch (e) {
-                // Skip
-            }
-        }
-    }
-    
-    // Search in subject data
-    Object.keys(subjects).forEach(subject => {
-        const data = subjectData[subject] || {};
-        (data.lectures || []).forEach(lecture => {
-            if (lecture.topics && lecture.topics.toLowerCase().includes(searchLower)) {
-                results.push({ type: `Lecture - ${subject}`, date: lecture.date, content: lecture.topics.substring(0, 100) });
-            }
-            if (lecture.notes && lecture.notes.toLowerCase().includes(searchLower)) {
-                results.push({ type: `Notes - ${subject}`, date: lecture.date, content: lecture.notes.substring(0, 100) });
-            }
-        });
-    });
-    
-    // Search in todo items
-    Object.keys(todoData).forEach(subject => {
-        const todos = todoData[subject] || [];
-        todos.forEach(todo => {
-            if (todo.task && todo.task.toLowerCase().includes(searchLower)) {
-                const status = todo.completed ? '✓ Completed' : '⏳ Pending';
-                const priority = todo.priority ? `[${todo.priority.toUpperCase()}]` : '';
-                const content = `${status} ${priority} ${todo.task}`;
-                const displayDate = todo.dueDate || todo.createdAt?.split('T')[0] || 'No date';
-                results.push({ 
-                    type: `Todo - ${subject}`, 
-                    date: displayDate, 
-                    content: content.substring(0, 100) 
-                });
-            }
-        });
-    });
-    
-    return results;
-}
+window.searchContent = async function (query) {
+  if (!query || query.trim().length === 0) return [];
 
-window.init = function() {
-    const dateInput = document.getElementById('dateInput');
-    dateInput.value = currentDate.toISOString().split('T')[0];
-    loadSubjectData();
-    loadGoals();
-    loadCancelledData();
-    loadTodoData();
-    loadDay();
-    renderWeeklyTimetable();
-    renderSubjectCards();
-    renderQuickStats();
-    renderTodoSection();
-    updateTimerDisplay();
-    updateCurrentTime();
-    updateUpcomingClass();
-    
-    // Update current time every second
-    setInterval(() => {
-        updateCurrentTime();
-    }, 1000);
-    
-    // Update upcoming class reminder every minute
-    setInterval(() => {
-        updateUpcomingClass();
-    }, 60000);
-    
-    // Show helpful tips on first load
-    if (!localStorage.getItem('tips_shown')) {
-        setTimeout(() => {
-            const tips = [
-                '💡 Tip: Use the study timer to automatically track your study sessions!',
-                '💡 Tip: Search feature helps you quickly find any notes or topics you\'ve recorded.',
-                '💡 Tip: Click on subject cards to see detailed progress and add new entries.',
-                '💡 Tip: Use the date navigation arrows (◀ ▶) to quickly jump between days.',
-                '💡 Tip: Export to PDF to create printable study reports!',
-                '💡 Tip: In the Todo section, use Ctrl+N to quickly add a new todo!'
-            ];
-            const tip = tips[Math.floor(Math.random() * tips.length)];
-            console.log(tip);
-            localStorage.setItem('tips_shown', 'true');
-        }, 2000);
-    }
-    
-    // Add keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-        // Ctrl/Cmd + N: Add new todo (when on todo tab)
-        if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-            const todoTab = document.getElementById('todoTab');
-            if (todoTab && todoTab.classList.contains('active')) {
-                e.preventDefault();
-                showAddTodoModal();
-            }
+  const results = [];
+  const searchLower = query.toLowerCase();
+
+  try {
+    // 🔍 1. Search daily entries from Firestore
+    const daysRef = collection(db, "users", userId, "days");
+    const snapshot = await getDocs(daysRef);
+
+    snapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      const date = docSnap.id;
+
+      // Python / DSA / Learnings
+      if (data.pythonTopics && data.pythonTopics.toLowerCase().includes(searchLower)) {
+        results.push({
+          type: "Python Topics",
+          date,
+          content: data.pythonTopics.substring(0, 100)
+        });
+      }
+
+      if (data.dsaTopics && data.dsaTopics.toLowerCase().includes(searchLower)) {
+        results.push({
+          type: "DSA Topics",
+          date,
+          content: data.dsaTopics.substring(0, 100)
+        });
+      }
+
+      if (data.keyLearnings && data.keyLearnings.toLowerCase().includes(searchLower)) {
+        results.push({
+          type: "Key Learnings",
+          date,
+          content: data.keyLearnings.substring(0, 100)
+        });
+      }
+
+      // Slots (lectures)
+      Object.values(data.slots || {}).forEach(slot => {
+        if (slot.topics && slot.topics.toLowerCase().includes(searchLower)) {
+          results.push({
+            type: "Lecture Topics",
+            date,
+            content: slot.topics.substring(0, 100)
+          });
         }
-        
-        // Escape: Close modal
-        if (e.key === 'Escape') {
-            const modal = document.getElementById('todoModal');
-            if (modal) {
-                closeTodoModal();
-            }
-        }
+      });
     });
-}
+
+    // 🔍 2. Search subject data (already loaded in memory)
+    Object.keys(subjects).forEach(subject => {
+      const data = subjectData[subject] || {};
+      (data.lectures || []).forEach(lecture => {
+        if (lecture.topics && lecture.topics.toLowerCase().includes(searchLower)) {
+          results.push({
+            type: `Lecture - ${subject}`,
+            date: lecture.date,
+            content: lecture.topics.substring(0, 100)
+          });
+        }
+        if (lecture.notes && lecture.notes.toLowerCase().includes(searchLower)) {
+          results.push({
+            type: `Notes - ${subject}`,
+            date: lecture.date,
+            content: lecture.notes.substring(0, 100)
+          });
+        }
+      });
+    });
+
+    // 🔍 3. Search todo items (already loaded in memory)
+    Object.keys(todoData).forEach(subject => {
+      const todos = todoData[subject] || [];
+      todos.forEach(todo => {
+        if (todo.task && todo.task.toLowerCase().includes(searchLower)) {
+          const status = todo.completed ? "✓ Completed" : "⏳ Pending";
+          const priority = todo.priority ? `[${todo.priority.toUpperCase()}]` : "";
+          const content = `${status} ${priority} ${todo.task}`;
+          const displayDate =
+            todo.dueDate || todo.createdAt?.split("T")[0] || "No date";
+
+          results.push({
+            type: `Todo - ${subject}`,
+            date: displayDate,
+            content: content.substring(0, 100)
+          });
+        }
+      });
+    });
+
+  } catch (error) {
+    console.error("Search error:", error);
+  }
+
+  return results;
+};
+
+
+window.init = async function () {
+  const dateInput = document.getElementById('dateInput');
+  dateInput.value = currentDate.toISOString().split('T')[0];
+
+  // 🔥 LOAD ALL DATA (AWAIT!)
+  await loadSubjectData();
+  await loadGoals();
+  await loadCancelledData();
+  await loadTodoData();
+  await loadDay();
+
+  // 🔄 Render UI
+  renderWeeklyTimetable();
+  renderSubjectCards();
+  renderQuickStats();
+  renderTodoSection();
+  updateTimerDisplay();
+  updateCurrentTime();
+  updateUpcomingClass();
+
+  // ⏱️ Timers
+  setInterval(updateCurrentTime, 1000);
+  setInterval(updateUpcomingClass, 60000);
+
+  // 💡 Show tips ONLY ONCE (Firestore-based)
+  try {
+    const uiRef = doc(db, "users", userId, "meta", "ui");
+    const uiSnap = await getDoc(uiRef);
+
+    if (!uiSnap.exists() || !uiSnap.data().tipsShown) {
+      setTimeout(() => {
+        const tips = [
+          "💡 Tip: Use the study timer to automatically track your study sessions!",
+          "💡 Tip: Search helps you quickly find any notes or topics you've recorded.",
+          "💡 Tip: Click subject cards to see detailed progress and add entries.",
+          "💡 Tip: Use date arrows (◀ ▶) to jump between days quickly.",
+          "💡 Tip: Export to PDF to create printable study reports!",
+          "💡 Tip: In Todo section, use Ctrl+N to quickly add a new todo!"
+        ];
+        console.log(tips[Math.floor(Math.random() * tips.length)]);
+      }, 2000);
+
+      await setDoc(uiRef, { tipsShown: true }, { merge: true });
+    }
+  } catch (e) {
+    console.warn("UI tips load failed:", e);
+  }
+
+  // ⌨️ Keyboard shortcuts
+  document.addEventListener("keydown", (e) => {
+    // Ctrl/Cmd + N → Add todo
+    if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+      const todoTab = document.getElementById("todoTab");
+      if (todoTab?.classList.contains("active")) {
+        e.preventDefault();
+        showAddTodoModal();
+      }
+    }
+
+    // Esc → Close modal
+    if (e.key === "Escape") {
+      const modal = document.getElementById("todoModal");
+      if (modal) closeTodoModal();
+    }
+  });
+};
+
 
 window.switchTab = function(tab) {
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -2278,11 +2347,11 @@ function renderQuickStats() {
     const quickStatsDiv = document.getElementById('quickStats');
     if (!quickStatsDiv) return;
     
-    const attendanceStreak = calculateAttendanceStreak();
-    const studyStreak = calculateStudyStreak();
+    const attendanceStreak = await calculateAttendanceStreak();
+    const studyStreak = await calculateStudyStreak();
     const pendingAssignments = getPendingAssignmentsCount();
     const missedToday = getMissedClassesToday();
-    const weeklyStats = getWeeklyStats();
+    const weeklyStats = await getWeeklyStats();
     
     let html = `
         <div class="quick-stats-grid">
@@ -2381,7 +2450,7 @@ window.navigateDay = function(direction) {
 }
 
 window.showSearchResults = function(query) {
-    const results = searchContent(query);
+    const results = await searchContent(query);
     const searchResultsDiv = document.getElementById('searchResults');
     if (!searchResultsDiv) return;
     
@@ -2422,18 +2491,25 @@ window.toggleSearch = function() {
     }
 }
 
-window.saveDay = function() {
-    const dateInput = document.getElementById('dateInput');
-    const storageKey = `study_${dateInput.value}`;
-    
-    try {
-        localStorage.setItem(storageKey, JSON.stringify(dayData));
-        showSaveIndicator();
-    } catch (error) {
-        console.error('Error saving day data:', error);
-        alert('Failed to save data: ' + error.message + '. Storage may be full.');
-    }
-}
+window.saveDay = async function () {
+  const dateInput = document.getElementById('dateInput');
+  const date = dateInput.value;
+
+  if (!date || !window.userId) return;
+
+  try {
+    await setDoc(
+      doc(db, "users", userId, "days", date),
+      dayData
+    );
+
+    showSaveIndicator();
+  } catch (error) {
+    console.error("Error saving day data to Firebase:", error);
+    alert("Failed to save data. Please check your connection.");
+  }
+};
+
 
 let autoSaveTimeout;
 function autoSave() {
@@ -2621,53 +2697,67 @@ window.loadHistoryDay = async function (date, event) {
 };
 
 
-window.exportData = function() {
-    try {
-        const allData = {
-            dayData: {},
-            subjectData: subjectData,
-            goals: studyGoals,
-            cancelledData: cancelledData,
-            todoData: todoData,
-            exportDate: new Date().toISOString(),
-            version: '2.0'
-        };
-        
-        // Collect all day data
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('study_')) {
-                try {
-                    allData.dayData[key] = JSON.parse(localStorage.getItem(key));
-                } catch (e) {
-                    console.error('Error parsing', key, e);
-                }
-            }
-        }
-        
-        // Also include subject data if stored separately
-        const subjectDataStored = localStorage.getItem('subject_data');
-        if (subjectDataStored) {
-            allData.subjectData = JSON.parse(subjectDataStored);
-        }
-        
-        const dataStr = JSON.stringify(allData, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `study_tracker_backup_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        alert('Data exported successfully!');
-    } catch (error) {
-        console.error('Export error:', error);
-        alert('Failed to export data: ' + error.message);
+window.exportData = async function () {
+  try {
+    if (!window.userId) {
+      alert("Please login first");
+      return;
     }
-}
+
+    const allData = {
+      dayData: {},
+      subjectData: {},
+      goals: {},
+      cancelledData: {},
+      todoData: {},
+      exportDate: new Date().toISOString(),
+      version: "2.0"
+    };
+
+    // 🔥 1. Export all days
+    const daysRef = collection(db, "users", userId, "days");
+    const daysSnap = await getDocs(daysRef);
+
+    daysSnap.forEach(docSnap => {
+      allData.dayData[docSnap.id] = docSnap.data();
+    });
+
+    // 🔥 2. Export meta data
+    const metaMap = [
+      ["subjects", "subjectData"],
+      ["goals", "goals"],
+      ["cancelled", "cancelledData"],
+      ["todos", "todoData"]
+    ];
+
+    for (const [docId, targetKey] of metaMap) {
+      const ref = doc(db, "users", userId, "meta", docId);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        allData[targetKey] = snap.data();
+      }
+    }
+
+    // 🔽 Download JSON
+    const dataStr = JSON.stringify(allData, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `study_tracker_backup_${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    alert("Data exported successfully!");
+  } catch (error) {
+    console.error("Export error:", error);
+    alert("Failed to export data. Please try again.");
+  }
+};
+
 
 window.exportToPDF = function() {
     // Calculate stats first
@@ -2769,42 +2859,59 @@ window.exportToPDF = function() {
     }, 250);
 }
 
-window.clearAllData = function() {
-    if (confirm('⚠️ WARNING: This will permanently delete ALL your study tracker data (daily entries, subject data, attendance records, etc.). This action cannot be undone!\n\nAre you absolutely sure you want to clear all data?')) {
-        if (confirm('Final confirmation: Delete all data? Click OK to proceed or Cancel to keep your data.')) {
-            try {
-                // Clear all study tracker related data from localStorage
-                const keysToRemove = [];
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && (key.startsWith('study_') || key === 'subject_data')) {
-                        keysToRemove.push(key);
-                    }
-                }
-                
-                keysToRemove.forEach(key => {
-                    localStorage.removeItem(key);
-                });
-                
-                // Reset variables
-                dayData = {};
-                subjectData = initializeSubjectData();
-                
-                // Reload UI
-                loadSubjectData();
-                loadDay();
-                renderSubjectCards();
-                
-                // Show confirmation
-                alert('✓ All data has been cleared successfully!');
-                showSaveIndicator();
-            } catch (error) {
-                console.error('Error clearing data:', error);
-                alert('Failed to clear data: ' + error.message);
-            }
-        }
+window.clearAllData = async function () {
+  if (!window.userId) {
+    alert("Please login first.");
+    return;
+  }
+
+  if (!confirm(
+    "⚠️ WARNING: This will permanently delete ALL your study tracker data (daily entries, subject data, attendance records, etc.).\n\nThis action CANNOT be undone.\n\nAre you sure?"
+  )) return;
+
+  if (!confirm("Final confirmation: Delete ALL data?")) return;
+
+  try {
+    // 🔥 1. Delete all daily data
+    const daysRef = collection(db, "users", userId, "days");
+    const daysSnap = await getDocs(daysRef);
+
+    for (const docSnap of daysSnap.docs) {
+      await deleteDoc(docSnap.ref);
     }
-}
+
+    // 🔥 2. Delete all meta data
+    const metaDocs = ["subjects", "goals", "cancelled", "todos"];
+
+    for (const docId of metaDocs) {
+      await deleteDoc(doc(db, "users", userId, "meta", docId));
+    }
+
+    // 🔄 3. Reset in-memory data
+    dayData = {};
+    subjectData = initializeSubjectData();
+    studyGoals = {};
+    cancelledData = {};
+    todoData = initializeTodoData();
+
+    // 🔄 4. Reload UI
+    await loadSubjectData();
+    await loadGoals();
+    await loadCancelledData();
+    await loadTodoData();
+    await loadDay();
+
+    renderSubjectCards();
+
+    alert("✓ All data has been cleared successfully!");
+    showSaveIndicator();
+
+  } catch (error) {
+    console.error("Error clearing data:", error);
+    alert("Failed to clear data. Please try again.");
+  }
+};
+
 
 // 🔥 Firebase save functions (cloud storage)
 
@@ -2891,6 +2998,7 @@ window.verifyOTP = async function () {
 
 
 init();
+
 
 
 
