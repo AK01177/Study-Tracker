@@ -158,14 +158,6 @@ function loadCancelledData() {
     }
 }
 
-function saveCancelledData() {
-    try {
-        localStorage.setItem('cancelled_data', JSON.stringify(cancelledData));
-    } catch (error) {
-        console.error('Failed to save cancellation data:', error);
-    }
-}
-
 // Mark day as holiday
 window.markAsHoliday = function() {
     const dateStr = currentDate.toISOString().split('T')[0];
@@ -236,14 +228,6 @@ function initializeTodoData() {
     });
     data['General'] = []; // For general todos not tied to a subject
     return data;
-}
-
-function saveTodoData() {
-    try {
-        localStorage.setItem('todo_data', JSON.stringify(todoData));
-    } catch (error) {
-        console.error('Failed to save todo data:', error);
-    }
 }
 
 function addTodo(subject, task, priority = 'medium', dueDate = null) {
@@ -2792,3 +2776,4 @@ async function saveCancelledData() {
 }
 
 init();
+
