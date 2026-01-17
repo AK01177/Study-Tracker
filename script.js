@@ -4,6 +4,12 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+import {
+  RecaptchaVerifier,
+  signInWithPhoneNumber
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+
 const timetable = {
     Monday: [
         {time: "8am-9am", subject: "EHD"},
@@ -2781,5 +2787,56 @@ window.saveCancelledData = async function() {
   );
 }
 
+window.initRecaptcha = function () {
+  if (window.recaptchaVerifier) return;
+
+  window.recaptchaVerifier = new RecaptchaVerifier(
+    auth,
+    "recaptcha-container",
+    {
+      size: "invisible"
+    }
+  );
+};
+
+window.sendOTP = async function () {
+  const phoneNumber = document.getElementById("phoneNumber").value;
+  if (!phoneNumber.startsWith("+")) {
+    alert("Use international format, e.g. +91XXXXXXXXXX");
+    return;
+  }
+
+  initRecaptcha();
+
+  try {
+    window.confirmationResult =
+      await signInWithPhoneNumber(
+        auth,
+        phoneNumber,
+        recaptchaVerifier
+      );
+
+    document.getElementById("otpBox").style.display = "block";
+    alert("OTP sent 📩");
+  } catch (err) {
+    alert(err.message);
+    console.error(err);
+  }
+};
+
+window.verifyOTP = async function () {
+  const code = document.getElementById("otpCode").value;
+
+  try {
+    const result = await confirmationResult.confirm(code);
+    console.log("Logged in:", result.user.phoneNumber);
+  } catch (err) {
+    alert("Invalid OTP");
+    console.error(err);
+  }
+};
+
+
 init();
+
 
