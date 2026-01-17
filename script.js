@@ -167,7 +167,7 @@ function saveCancelledData() {
 }
 
 // Mark day as holiday
-function markAsHoliday() {
+window.markAsHoliday = function() {
     const dateStr = currentDate.toISOString().split('T')[0];
     if (!cancelledData[dateStr]) {
         cancelledData[dateStr] = {};
@@ -180,7 +180,7 @@ function markAsHoliday() {
 }
 
 // Unmark holiday
-function unmarkHoliday() {
+window.unmarkHoliday = function() {
     const dateStr = currentDate.toISOString().split('T')[0];
     if (cancelledData[dateStr]) {
         delete cancelledData[dateStr].isHoliday;
@@ -195,7 +195,7 @@ function unmarkHoliday() {
 }
 
 // Toggle class/lab cancellation
-function toggleCancellation(index) {
+window.toggleCancellation = function(index) {
     const dateStr = currentDate.toISOString().split('T')[0];
     if (!cancelledData[dateStr]) {
         cancelledData[dateStr] = {};
@@ -268,7 +268,7 @@ function addTodo(subject, task, priority = 'medium', dueDate = null) {
     return todo;
 }
 
-function toggleTodo(subject, todoId) {
+window.toggleTodo = function(subject, todoId) {
     const todo = todoData[subject]?.find(t => t.id === todoId);
     if (!todo) return;
     
@@ -306,7 +306,7 @@ function toggleTodo(subject, todoId) {
     renderTodoSection();
 }
 
-function deleteTodo(subject, todoId) {
+window.deleteTodo = function(subject, todoId) {
     if (!todoData[subject]) return;
     todoData[subject] = todoData[subject].filter(t => t.id !== todoId);
     saveTodoData();
@@ -537,7 +537,7 @@ function renderTodoSection() {
     container.innerHTML = html;
 }
 
-function showAddTodoModal() {
+window.showAddTodoModal = function() {
     const modal = document.createElement('div');
     modal.id = 'todoModal';
     modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;';
@@ -587,7 +587,7 @@ function showAddTodoModal() {
     document.getElementById('todoTask').focus();
 }
 
-function showEditTodoModal(subject, todoId) {
+window.showEditTodoModal = function(subject, todoId) {
     const todo = todoData[subject]?.find(t => t.id === todoId);
     if (!todo) return;
     
@@ -639,12 +639,12 @@ function showEditTodoModal(subject, todoId) {
     document.body.appendChild(modal);
 }
 
-function closeTodoModal() {
+window.closeTodoModal = function() {
     const modal = document.getElementById('todoModal');
     if (modal) modal.remove();
 }
 
-function submitAddTodo() {
+window.submitAddTodo = function() {
     const subject = document.getElementById('todoSubject').value;
     const task = document.getElementById('todoTask').value.trim();
     const priority = document.getElementById('todoPriority').value;
@@ -666,7 +666,7 @@ function submitAddTodo() {
     renderTodoSection();
 }
 
-function submitEditTodo(oldSubject, todoId) {
+window.submitEditTodo = function(oldSubject, todoId) {
     const newSubject = document.getElementById('todoSubject').value;
     const task = document.getElementById('todoTask').value.trim();
     const priority = document.getElementById('todoPriority').value;
@@ -700,7 +700,7 @@ function submitEditTodo(oldSubject, todoId) {
 }
 
 // Bulk delete completed todos
-function deleteCompletedTodos() {
+window.deleteCompletedTodos = function() {
     const confirmDelete = confirm('Are you sure you want to delete all completed todos? This action cannot be undone.');
     if (!confirmDelete) return;
     
@@ -717,7 +717,7 @@ function deleteCompletedTodos() {
 }
 
 // Export todos to JSON
-function exportTodos() {
+window.exportTodos = function() {
     const exportData = {
         exportDate: new Date().toISOString(),
         todos: todoData,
@@ -873,7 +873,7 @@ function getUpcomingClass() {
 }
 
 // Study session timer functions
-function startStudyTimer(subject = null) {
+window.startStudyTimer = function(subject=null) {
     if (activeTimer) {
         stopStudyTimer();
     }
@@ -884,7 +884,7 @@ function startStudyTimer(subject = null) {
     updateTimerDisplay();
 }
 
-function stopStudyTimer() {
+window.stopStudyTimer = function() {
     if (!activeTimer) return;
     
     clearInterval(activeTimer);
@@ -1137,7 +1137,7 @@ function init() {
     });
 }
 
-function switchTab(tab) {
+window.switchTab = function(tab) {
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     
@@ -1373,7 +1373,7 @@ function renderSubjectCards() {
     renderQuickStats();
 }
 
-function showSubjectDetail(subject) {
+window.showSubjectDetail = function(subject) {
     const info = subjects[subject];
     const data = subjectData[subject] || { lectures: [], labs: [], selfStudyTopics: [] };
     
@@ -1640,7 +1640,7 @@ function showSubjectDetail(subject) {
     detailDiv.innerHTML = html;
 }
 
-function editLecture(subject, index) {
+window.editLecture = function(subject, index) {
     const lecture = subjectData[subject].lectures[index];
     const newTopics = prompt('Edit topics covered:', lecture.topics || '');
     if (newTopics !== null) {
@@ -1657,7 +1657,7 @@ function editLecture(subject, index) {
     showSaveIndicator();
 }
 
-function editLab(subject, index) {
+window.editLab = function(subject, index) {
     const lab = subjectData[subject].labs[index];
     const newExperiment = prompt('Edit experiment/topic:', lab.experiment || '');
     if (newExperiment !== null) {
@@ -1678,7 +1678,7 @@ function editLab(subject, index) {
     showSaveIndicator();
 }
 
-function editSelfStudy(subject, index) {
+window.editSelfStudy = function(subject, index) {
     const selfStudy = subjectData[subject].selfStudyTopics[index];
     const newTopics = prompt('Edit topics studied:', selfStudy.topics || '');
     if (newTopics !== null) {
@@ -1697,7 +1697,7 @@ function editSelfStudy(subject, index) {
     showSaveIndicator();
 }
 
-function toggleAssignment(subject, index) {
+window.toggleAssignment = function(subject, index) {
     const assignment = subjectData[subject].assignments[index];
     assignment.completed = !assignment.completed;
     saveSubjectData();
@@ -1705,7 +1705,7 @@ function toggleAssignment(subject, index) {
     showSaveIndicator();
 }
 
-function editEvaluationScore(subject, index) {
+window.editEvaluationScore = function(subject, index) {
     const evalItem = subjects[subject].evaluation[index];
     if (!evalItem) return;
     
@@ -1756,12 +1756,12 @@ function editEvaluationScore(subject, index) {
     showSaveIndicator();
 }
 
-function backToSubjects() {
+window.backToSubjects = function() {
     document.getElementById('subjectsList').style.display = 'block';
     document.getElementById('subjectDetail').style.display = 'none';
 }
 
-function addLecture(subject) {
+window.addLecture = function(subject) {
     const date = prompt('Enter lecture date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
     if (!date) return;
     
@@ -1787,7 +1787,7 @@ function addLecture(subject) {
     showSaveIndicator();
 }
 
-function addLab(subject) {
+window.addLab = function(subject) {
     const date = prompt('Enter lab date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
     if (!date) return;
     
@@ -1825,7 +1825,7 @@ function addLab(subject) {
     showSaveIndicator();
 }
 
-function addSelfStudy(subject) {
+window.addSelfStudy = function(subject) {
     const date = prompt('Enter date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
     if (!date) return;
     
@@ -1847,7 +1847,7 @@ function addSelfStudy(subject) {
     showSaveIndicator();
 }
 
-function loadDay() {
+window.loadDay = function() {
     const dateInput = document.getElementById('dateInput');
     currentDate = new Date(dateInput.value);
     
@@ -1986,7 +1986,7 @@ function renderTimetable(dayName) {
     container.innerHTML = html;
 }
 
-function markAttendance(index, status) {
+window.markAttendance = function(index, status) {
     if (!dayData.slots) dayData.slots = {};
     if (!dayData.slots[index]) dayData.slots[index] = {};
     
@@ -2020,7 +2020,7 @@ function markAttendance(index, status) {
     autoSave();
 }
 
-function updateSlotData(index, field, value) {
+window.updateSlotData = function(index, field, value) {
     if (!dayData.slots) dayData.slots = {};
     if (!dayData.slots[index]) dayData.slots[index] = {};
     
@@ -2282,7 +2282,7 @@ function updateUpcomingClass() {
     }
 }
 
-function navigateDay(direction) {
+window.navigateDay = function(direction) {
     const dateInput = document.getElementById('dateInput');
     const currentDateObj = new Date(dateInput.value);
     currentDateObj.setDate(currentDateObj.getDate() + direction);
@@ -2291,7 +2291,7 @@ function navigateDay(direction) {
     renderQuickStats();
 }
 
-function showSearchResults(query) {
+window.showSearchResults = function(query) {
     const results = searchContent(query);
     const searchResultsDiv = document.getElementById('searchResults');
     if (!searchResultsDiv) return;
@@ -2320,7 +2320,7 @@ function showSearchResults(query) {
     searchResultsDiv.style.display = 'block';
 }
 
-function toggleSearch() {
+window.toggleSearch = function() {
     const searchContainer = document.getElementById('searchContainer');
     if (!searchContainer) return;
     
@@ -2333,7 +2333,7 @@ function toggleSearch() {
     }
 }
 
-function saveDay() {
+window.saveDay = function() {
     const dateInput = document.getElementById('dateInput');
     const storageKey = `study_${dateInput.value}`;
     
@@ -2363,7 +2363,7 @@ function showSaveIndicator() {
 let historyFilterStart = null;
 let historyFilterEnd = null;
 
-function showHistory() {
+window.showHistory = function() {
     const historyGrid = document.getElementById('historyGrid');
     const historyStats = document.getElementById('historyStats');
     
@@ -2487,13 +2487,13 @@ function showHistory() {
     }
 }
 
-function applyHistoryFilter() {
+window.applyHistoryFilter = function() {
     historyFilterStart = document.getElementById('historyFilterStart')?.value || null;
     historyFilterEnd = document.getElementById('historyFilterEnd')?.value || null;
     showHistory();
 }
 
-function clearHistoryFilter() {
+window.clearHistoryFilter = function() {
     historyFilterStart = null;
     historyFilterEnd = null;
     if (document.getElementById('historyFilterStart')) document.getElementById('historyFilterStart').value = '';
@@ -2501,7 +2501,7 @@ function clearHistoryFilter() {
     showHistory();
 }
 
-function loadHistoryDay(date) {
+window.loadHistoryDay = function(date, event) {
     if (event) {
         event.stopPropagation();
         event.preventDefault();
@@ -2515,7 +2515,7 @@ function loadHistoryDay(date) {
     loadDay();
 }
 
-function exportData() {
+window.exportData = function() {
     try {
         const allData = {
             dayData: {},
@@ -2563,7 +2563,7 @@ function exportData() {
     }
 }
 
-function exportToPDF() {
+window.exportToPDF = function() {
     // Calculate stats first
     const slots = dayData.slots || {};
     const slotArray = Object.values(slots);
@@ -2663,7 +2663,7 @@ function exportToPDF() {
     }, 250);
 }
 
-function importData() {
+window.importData = function() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -2736,7 +2736,7 @@ function importData() {
     input.click();
 }
 
-function clearAllData() {
+window.clearAllData = function() {
     if (confirm('⚠️ WARNING: This will permanently delete ALL your study tracker data (daily entries, subject data, attendance records, etc.). This action cannot be undone!\n\nAre you absolutely sure you want to clear all data?')) {
         if (confirm('Final confirmation: Delete all data? Click OK to proceed or Cancel to keep your data.')) {
             try {
