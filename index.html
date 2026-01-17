@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Study Tracker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Academic Study Tracker</h1>
+            <p>Track your attendance, studies, and productivity</p>
+        </div>
+
+        <div class="nav-tabs">
+            <div class="nav-tab active" onclick="switchTab('daily')">📅 Daily Tracker</div>
+            <div class="nav-tab" onclick="switchTab('timetable')">🗓️ Weekly Timetable</div>
+            <div class="nav-tab" onclick="switchTab('subjects')">📖 Subjects Overview</div>
+            <div class="nav-tab" onclick="switchTab('todo')">📝 Study Todo</div>
+            <div class="nav-tab" onclick="switchTab('history')">📊 History</div>
+            <div style="margin-left: auto; display: flex; gap: 10px; align-items: center; padding: 0 20px; flex-wrap: wrap;">
+                <button class="btn btn-secondary" onclick="toggleSearch()" style="padding: 10px 20px; font-size: 14px;">🔍 Search</button>
+                <button class="btn btn-secondary" onclick="exportData()" style="padding: 10px 20px; font-size: 14px;">💾 Export JSON</button>
+                <button class="btn btn-secondary" onclick="exportToPDF()" style="padding: 10px 20px; font-size: 14px;">📄 Export PDF</button>
+                <button class="btn btn-secondary" onclick="importData()" style="padding: 10px 20px; font-size: 14px;">📥 Import</button>
+                <button class="btn btn-secondary" onclick="clearAllData()" style="padding: 10px 20px; font-size: 14px; background: #ef4444; color: white; border-color: #ef4444;">🗑️ Clear Data</button>
+            </div>
+        </div>
+
+        <!-- Search Container -->
+        <div id="searchContainer" style="display: none; padding: 20px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-light);">
+            <div style="display: flex; gap: 10px; align-items: center; max-width: 800px; margin: 0 auto;">
+                <input type="text" id="searchInput" placeholder="Search notes, topics, learnings..." 
+                       style="flex: 1; padding: 12px 20px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 15px;"
+                       onkeyup="if(event.key === 'Enter') showSearchResults(this.value)"
+                       oninput="if(this.value.length === 0) document.getElementById('searchResults').style.display = 'none'">
+                <button class="btn btn-primary" onclick="showSearchResults(document.getElementById('searchInput').value)">Search</button>
+                <button class="btn btn-secondary" onclick="toggleSearch()">Close</button>
+            </div>
+            <div id="searchResults" style="display: none; margin-top: 20px; max-width: 800px; margin-left: auto; margin-right: auto;"></div>
+        </div>
+
+        <!-- Daily Tracker Tab -->
+        <div id="dailyTab" class="tab-content active">
+            <div class="date-selector">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button class="btn btn-secondary" onclick="navigateDay(-1)" style="padding: 10px 15px; font-size: 18px;">◀</button>
+                    <div>
+                        <label for="dateInput">Select Date:</label>
+                        <input type="date" id="dateInput" onchange="loadDay()">
+                    </div>
+                    <button class="btn btn-secondary" onclick="navigateDay(1)" style="padding: 10px 15px; font-size: 18px;">▶</button>
+                    <button class="btn btn-primary" onclick="loadDay()">Load Day</button>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <div id="currentTime" style="padding: 8px 15px; background: var(--bg-secondary); border-radius: var(--radius-md); font-weight: 600; color: var(--text-secondary);"></div>
+                    <button class="btn btn-secondary" onclick="markAsHoliday()" style="background: #fdcb6e; border-color: #fdcb6e; color: #2d3436;">🎉 Mark as Holiday</button>
+                    <button class="btn btn-secondary" onclick="saveDay()">Save Progress</button>
+                </div>
+            </div>
+
+            <div class="content">
+                <!-- Quick Stats Dashboard -->
+                <div class="quick-stats-section" style="margin-bottom: 30px;">
+                    <h3 style="color: var(--accent-primary); margin-bottom: 15px; font-size: 1.3em;">⚡ Quick Stats</h3>
+                    <div id="quickStats"></div>
+                </div>
+
+                <!-- Upcoming Class Reminder -->
+                <div id="upcomingClass" style="display: none; margin-bottom: 20px;"></div>
+
+                <!-- Study Timer -->
+                <div class="timer-section" style="background: linear-gradient(135deg, #faf8f5 0%, #f5f2ed 100%); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 30px; border: 1px solid rgba(212, 175, 55, 0.15);">
+                    <h3 style="color: var(--accent-primary); margin-bottom: 15px; font-size: 1.3em;">⏱️ Study Timer</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; align-items: center;">
+                        <div>
+                            <div style="font-size: 3em; font-weight: 700; color: var(--accent-primary); font-family: monospace; text-align: center; margin-bottom: 10px;" id="timerDisplay">00:00:00</div>
+                            <div style="text-align: center; color: var(--text-secondary); font-weight: 600;" id="timerStatus">Timer Stopped</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <select id="timerSubject" style="padding: 12px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 15px;">
+                                <option value="">General Study</option>
+                                <option value="EHD">EHD</option>
+                                <option value="PNS">PNS</option>
+                                <option value="ICS">ICS</option>
+                                <option value="POE">POE</option>
+                                <option value="DBMS">DBMS</option>
+                                <option value="Optimization">Optimization</option>
+                                <option value="Python">Python</option>
+                                <option value="DSA">DSA</option>
+                            </select>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary" onclick="startStudyTimer(document.getElementById('timerSubject').value)" style="flex: 1;">▶ Start Timer</button>
+                                <button class="btn btn-secondary" onclick="stopStudyTimer()" style="flex: 1;">⏹ Stop Timer</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="day-info" id="dayInfo"></div>
+
+                <div class="stats-grid">
+                    <div class="stat-card" title="Percentage of classes attended today">
+                        <h4>Today's Attendance</h4>
+                        <div class="stat-value" id="attendanceRate">0%</div>
+                        <div style="font-size: 0.85em; color: var(--text-tertiary); margin-top: 5px;">Keep it up! 🔥</div>
+                    </div>
+                    <div class="stat-card" title="Total self-study hours for today's subjects">
+                        <h4>Self Study Hours</h4>
+                        <div class="stat-value" id="studyHours">0</div>
+                        <div style="font-size: 0.85em; color: var(--text-tertiary); margin-top: 5px;">Great progress! 📚</div>
+                    </div>
+                    <div class="stat-card" title="Number of classes attended vs total scheduled">
+                        <h4>Classes Attended</h4>
+                        <div class="stat-value" id="classesCount">0/0</div>
+                        <div style="font-size: 0.85em; color: var(--text-tertiary); margin-top: 5px;">Stay consistent! ✅</div>
+                    </div>
+                    <div class="stat-card" title="Total study time including Python/DSA practice">
+                        <h4>Total Study Time</h4>
+                        <div class="stat-value" id="totalStudy">0h</div>
+                        <div style="font-size: 0.85em; color: var(--text-tertiary); margin-top: 5px;">Every hour counts! ⏰</div>
+                    </div>
+                </div>
+
+                <div id="timetableContainer"></div>
+
+                <div class="extra-section">
+                    <h3>🐍 Python & DSA Practice (1 Hour Daily Each)</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div>
+                            <h4 style="color: #667eea; margin-bottom: 15px;">Python (1 Hour)</h4>
+                            <div class="input-group">
+                                <label>Python Topics Covered:</label>
+                                <textarea id="pythonTopics" placeholder="E.g., List comprehensions, Lambda functions, Decorators, Generators..."></textarea>
+                            </div>
+                            <div class="input-group">
+                                <label>Python Practice Duration (minutes):</label>
+                                <input type="number" id="pythonDuration" min="0" max="120" value="60" step="15">
+                            </div>
+                            <div class="input-group">
+                                <label>Resources Used:</label>
+                                <input type="text" id="pythonResources" placeholder="E.g., Python docs, LeetCode, YouTube...">
+                            </div>
+                        </div>
+                        <div>
+                            <h4 style="color: #667eea; margin-bottom: 15px;">DSA (1 Hour)</h4>
+                            <div class="input-group">
+                                <label>DSA Topics/Problems Solved:</label>
+                                <textarea id="dsaTopics" placeholder="E.g., Binary Search, Leetcode #234, Two Pointers, Dynamic Programming..."></textarea>
+                            </div>
+                            <div class="input-group">
+                                <label>DSA Practice Duration (minutes):</label>
+                                <input type="number" id="dsaDuration" min="0" max="120" value="60" step="15">
+                            </div>
+                            <div class="input-group">
+                                <label>Problems Solved (Count):</label>
+                                <input type="number" id="dsaProblemsCount" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="extra-section" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);">
+                    <h3>📝 Daily Notes & Reflections</h3>
+                    <div class="input-group">
+                        <label>Key Learnings Today:</label>
+                        <textarea id="keyLearnings" placeholder="What did you learn today?"></textarea>
+                    </div>
+                    <div class="input-group">
+                        <label>Goals for Tomorrow:</label>
+                        <textarea id="tomorrowGoals" placeholder="What do you want to achieve tomorrow?"></textarea>
+                    </div>
+                    <div class="input-group">
+                        <label>Challenges Faced:</label>
+                        <textarea id="challenges" placeholder="Any difficulties or obstacles?"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weekly Timetable Tab -->
+        <div id="timetableTab" class="tab-content">
+            <div class="content">
+                <h2 style="color: #667eea; margin-bottom: 20px;">📅 Weekly Timetable</h2>
+                
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color subject-ehd"></div>
+                        <span>EHD</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color subject-pns"></div>
+                        <span>PNS</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color subject-ics"></div>
+                        <span>ICS</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color subject-poe"></div>
+                        <span>POE</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color subject-dbms"></div>
+                        <span>DBMS</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color subject-optimization"></div>
+                        <span>Optimization</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color subject-dbms-lab"></div>
+                        <span>Labs (Dark)</span>
+                    </div>
+                </div>
+
+                <div class="weekly-timetable">
+                    <div class="timetable-grid" id="weeklyGrid"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subjects Tab -->
+        <div id="subjectsTab" class="tab-content">
+            <div class="content">
+                <div id="subjectsList">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">📖 All Subjects Overview</h2>
+                    
+                    <div class="stats-grid" style="margin-bottom: 30px;">
+                        <div class="stat-card">
+                            <h4>Total Lectures Tracked</h4>
+                            <div class="stat-value" id="totalLectures">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Total Labs Tracked</h4>
+                            <div class="stat-value" id="totalLabs">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Overall Attendance Rate</h4>
+                            <div class="stat-value" id="overallAttendance">0%</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Total Self-Study Hours</h4>
+                            <div class="stat-value" id="totalSelfStudy">0h</div>
+                        </div>
+                    </div>
+                    
+                    <div class="subject-cards" id="subjectCards"></div>
+                </div>
+                <div id="subjectDetail" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Todo Tab -->
+        <div id="todoTab" class="tab-content">
+            <div class="content" id="todoContent">
+                <!-- Todo content will be rendered by JavaScript -->
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="historyTab" class="tab-content">
+            <div class="content">
+                <div class="history-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                        <h3 style="margin: 0;">📅 Study History</h3>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <input type="date" id="historyFilterStart" placeholder="Start Date" style="padding: 10px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 14px;">
+                            <input type="date" id="historyFilterEnd" placeholder="End Date" style="padding: 10px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 14px;">
+                            <button class="btn btn-secondary" onclick="applyHistoryFilter()" style="padding: 10px 20px; font-size: 14px;">🔍 Filter</button>
+                            <button class="btn btn-secondary" onclick="clearHistoryFilter()" style="padding: 10px 20px; font-size: 14px;">Clear</button>
+                            <select id="historySort" onchange="showHistory()" style="padding: 10px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 14px;">
+                                <option value="newest">Sort: Newest First</option>
+                                <option value="oldest">Sort: Oldest First</option>
+                                <option value="hours">Sort: Most Study Hours</option>
+                                <option value="attendance">Sort: Best Attendance</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="historyStats" style="background: var(--bg-secondary); padding: 20px; border-radius: var(--radius-lg); margin-bottom: 20px; display: none;"></div>
+                    <div class="history-grid" id="historyGrid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="save-indicator" id="saveIndicator">✓ Saved!</div>
+
+    <script src="script.js"></script>
+</body>
+</html>
