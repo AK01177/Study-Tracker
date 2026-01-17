@@ -1623,6 +1623,14 @@ button:focus-visible,
     border-bottom: none;
 }
 
+#recaptcha-container {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
 /* Responsive adjustments for new features */
 @media (max-width: 768px) {
     .quick-stats-grid {
@@ -1669,4 +1677,5 @@ button:focus-visible,
     .evaluation-table table {
         min-width: 600px;
     }
+
 }
