@@ -2449,7 +2449,7 @@ window.navigateDay = function(direction) {
     renderQuickStats();
 }
 
-window.showSearchResults = function(query) {
+window.showSearchResults = async function(query) {
     const results = await searchContent(query);
     const searchResultsDiv = document.getElementById('searchResults');
     if (!searchResultsDiv) return;
@@ -2998,6 +2998,7 @@ window.verifyOTP = async function () {
 
 
 init();
+
 
 
 
