@@ -2065,6 +2065,72 @@ window.updateSlotData = function(index, field, value) {
     autoSave();
 }
 
+window.importData = function () {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+      await importBackupToFirebase(backup);
+    } catch (err) {
+      alert("❌ Invalid JSON file");
+      console.error(err);
+    }
+  };
+
+  input.click();
+};
+
+window.importBackupToFirebase = async function (backup) {
+  if (!window.userId) {
+    alert("❌ Please login first");
+    return;
+  }
+
+  let importedDays = 0;
+
+  // 1️⃣ Import daily study data
+  for (const key in backup) {
+    if (key.startsWith("study_")) {
+      const date = key.replace("study_", "");
+      await saveDayData(date, backup[key]);
+      importedDays++;
+    }
+  }
+
+  // 2️⃣ Import subject data
+  if (backup.subject_data) {
+    subjectData = backup.subject_data;
+    await saveSubjectData();
+  }
+
+  // 3️⃣ Import todo data
+  if (backup.todo_data) {
+    todoData = backup.todo_data;
+    await saveTodoData();
+  }
+
+  // 4️⃣ Import cancelled data (if present)
+  if (backup.cancelled_data) {
+    cancelledData = backup.cancelled_data;
+    await saveCancelledData();
+  }
+
+  alert(`✅ Import complete!
+📅 Days imported: ${importedDays}
+📚 Subjects & Todos restored`);
+};
+
+
+
+
+
 function updateLectureTopics(subject, time, topics) {
     if (!subjectData[subject]) subjectData[subject] = { lectures: [], labs: [], selfStudyTopics: [], assignments: [] };
     if (!subjectData[subject].lectures) subjectData[subject].lectures = [];
@@ -2663,79 +2729,6 @@ window.exportToPDF = function() {
     }, 250);
 }
 
-window.importData = function() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const importedData = JSON.parse(event.target.result);
-                
-                if (confirm('This will replace all your current data. Are you sure?')) {
-                    // Clear existing data
-                    for (let i = localStorage.length - 1; i >= 0; i--) {
-                        const key = localStorage.key(i);
-                        if (key && (key.startsWith('study_') || key === 'subject_data')) {
-                            localStorage.removeItem(key);
-                        }
-                    }
-                    
-                    // Import day data
-                    if (importedData.dayData) {
-                        Object.keys(importedData.dayData).forEach(key => {
-                            localStorage.setItem(key, JSON.stringify(importedData.dayData[key]));
-                        });
-                    }
-                    
-                    // Import subject data
-                    if (importedData.subjectData) {
-                        localStorage.setItem('subject_data', JSON.stringify(importedData.subjectData));
-                    }
-                    
-                    // Import goals
-                    if (importedData.goals) {
-                        studyGoals = importedData.goals;
-                        saveGoals();
-                    }
-                    
-                    // Import cancellation data
-                    if (importedData.cancelledData) {
-                        cancelledData = importedData.cancelledData;
-                        saveCancelledData();
-                    }
-                    
-                    // Import todo data
-                    if (importedData.todoData) {
-                        todoData = importedData.todoData;
-                        saveTodoData();
-                    }
-                    
-                    // Reload
-                    loadSubjectData();
-                    loadGoals();
-                    loadCancelledData();
-                    loadTodoData();
-                    loadDay();
-                    renderSubjectCards();
-                    renderQuickStats();
-                    
-                    alert('Data imported successfully!');
-                }
-            } catch (error) {
-                console.error('Import error:', error);
-                alert('Failed to import data: ' + error.message);
-            }
-        };
-        reader.readAsText(file);
-    };
-    input.click();
-}
-
 window.clearAllData = function() {
     if (confirm('⚠️ WARNING: This will permanently delete ALL your study tracker data (daily entries, subject data, attendance records, etc.). This action cannot be undone!\n\nAre you absolutely sure you want to clear all data?')) {
         if (confirm('Final confirmation: Delete all data? Click OK to proceed or Cancel to keep your data.')) {
@@ -2771,6 +2764,40 @@ window.clearAllData = function() {
             }
         }
     }
+}
+
+// 🔥 Firebase save functions (cloud storage)
+
+async function saveDayData(date, data) {
+  if (!window.userId) return;
+  await setDoc(
+    doc(db, "users", userId, "days", date),
+    data
+  );
+}
+
+async function saveSubjectData() {
+  if (!window.userId) return;
+  await setDoc(
+    doc(db, "users", userId, "meta", "subjects"),
+    subjectData
+  );
+}
+
+async function saveTodoData() {
+  if (!window.userId) return;
+  await setDoc(
+    doc(db, "users", userId, "meta", "todos"),
+    todoData
+  );
+}
+
+async function saveCancelledData() {
+  if (!window.userId) return;
+  await setDoc(
+    doc(db, "users", userId, "meta", "cancelled"),
+    cancelledData
+  );
 }
 
 init();
