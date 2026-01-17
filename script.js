@@ -2343,7 +2343,7 @@ function updateStats() {
     }
 }
 
-function renderQuickStats() {
+window.renderQuickStats = async function() {
     const quickStatsDiv = document.getElementById('quickStats');
     if (!quickStatsDiv) return;
     
@@ -2998,6 +2998,7 @@ window.verifyOTP = async function () {
 
 
 init();
+
 
 
 
