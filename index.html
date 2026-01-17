@@ -339,7 +339,7 @@
             await signInWithPopup(auth, provider);
         };
 
-        onAuthStateChanged(auth, asyc (user) => {
+        onAuthStateChanged(auth, async (user) => {
             if (user){
                 window.userId = user.uid;
                 console.log("Logged in:", user.email);
@@ -360,6 +360,7 @@
     <div id="recaptcha-container"></div>
 </body>
 </html>
+
 
 
 
