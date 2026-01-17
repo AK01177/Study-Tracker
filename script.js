@@ -141,15 +141,19 @@ let cancelledData = {}; // Store holiday and cancellation data
 let todoData = {}; // Store todo items by subject
 
 // Load and save goals
-function loadGoals() {
-    try {
-        const stored = localStorage.getItem('study_goals');
-        studyGoals = stored ? JSON.parse(stored) : {};
-    } catch (error) {
-        console.error('Error loading goals:', error);
-        studyGoals = {};
-    }
-}
+window.loadGoals = async function () {
+  try {
+    const ref = doc(db, "users", userId, "meta", "goals");
+    const snap = await getDoc(ref);
+
+    studyGoals = snap.exists() ? snap.data() : {};
+
+  } catch (error) {
+    console.error("Error loading goals from Firebase:", error);
+    studyGoals = {};
+  }
+};
+
 
 function saveGoals() {
     try {
@@ -160,15 +164,19 @@ function saveGoals() {
 }
 
 // Load and save cancellation data
-function loadCancelledData() {
-    try {
-        const stored = localStorage.getItem('cancelled_data');
-        cancelledData = stored ? JSON.parse(stored) : {};
-    } catch (error) {
-        console.error('Error loading cancellation data:', error);
-        cancelledData = {};
-    }
-}
+window.loadCancelledData = async function () {
+  try {
+    const ref = doc(db, "users", userId, "meta", "cancelled");
+    const snap = await getDoc(ref);
+
+    cancelledData = snap.exists() ? snap.data() : {};
+
+  } catch (error) {
+    console.error("Error loading cancellation data from Firebase:", error);
+    cancelledData = {};
+  }
+};
+
 
 // Mark day as holiday
 window.markAsHoliday = function() {
@@ -223,15 +231,21 @@ window.toggleCancellation = function(index) {
 }
 
 // Todo management functions
-function loadTodoData() {
-    try {
-        const stored = localStorage.getItem('todo_data');
-        todoData = stored ? JSON.parse(stored) : initializeTodoData();
-    } catch (error) {
-        console.error('Error loading todo data:', error);
-        todoData = initializeTodoData();
-    }
-}
+window.loadTodoData = async function () {
+  try {
+    const ref = doc(db, "users", userId, "meta", "todos");
+    const snap = await getDoc(ref);
+
+    todoData = snap.exists()
+      ? snap.data()
+      : initializeTodoData();
+
+  } catch (error) {
+    console.error("Error loading todo data from Firebase:", error);
+    todoData = initializeTodoData();
+  }
+};
+
 
 function initializeTodoData() {
     const data = {};
@@ -1235,28 +1249,39 @@ function renderWeeklyTimetable() {
     grid.innerHTML = html;
 }
 
-function loadSubjectData() {
-    try {
-        const stored = localStorage.getItem('subject_data');
-        subjectData = stored ? JSON.parse(stored) : initializeSubjectData();
-        
-        // Load evaluation scores for each subject
-        Object.keys(subjects).forEach(subject => {
-            if (subjectData[subject] && subjectData[subject].evaluationScores) {
-                subjects[subject].evaluation.forEach(evalItem => {
-                    const savedScore = subjectData[subject].evaluationScores.find(s => s.type === evalItem.type);
-                    if (savedScore) {
-                        evalItem.score = savedScore.score;
-                        evalItem.maxScore = savedScore.maxScore;
-                    }
-                });
-            }
+window.loadSubjectData = async function () {
+  try {
+    const ref = doc(db, "users", userId, "meta", "subjects");
+    const snap = await getDoc(ref);
+
+    // 1️⃣ Load from Firebase or initialize
+    subjectData = snap.exists()
+      ? snap.data()
+      : initializeSubjectData();
+
+    // 2️⃣ Apply saved evaluation scores to subjects config
+    Object.keys(subjects).forEach(subject => {
+      if (subjectData[subject] && subjectData[subject].evaluationScores) {
+        subjects[subject].evaluation.forEach(evalItem => {
+          const savedScore =
+            subjectData[subject].evaluationScores.find(
+              s => s.type === evalItem.type
+            );
+
+          if (savedScore) {
+            evalItem.score = savedScore.score;
+            evalItem.maxScore = savedScore.maxScore;
+          }
         });
-    } catch (error) {
-        console.error('Error loading subject data:', error);
-        subjectData = initializeSubjectData();
-    }
-}
+      }
+    });
+
+  } catch (error) {
+    console.error("Error loading subject data from Firebase:", error);
+    subjectData = initializeSubjectData();
+  }
+};
+
 
 function initializeSubjectData() {
     const data = {};
@@ -1834,32 +1859,41 @@ window.addSelfStudy = function(subject) {
     showSaveIndicator();
 }
 
-window.loadDay = function() {
-    const dateInput = document.getElementById('dateInput');
-    currentDate = new Date(dateInput.value);
-    
-    const dayName = currentDate.toLocaleDateString('en-US', {weekday: 'long'});
-    if (document.getElementById('dayInfo')) {
-        document.getElementById('dayInfo').textContent = `${dayName}, ${currentDate.toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'})}`;
-    }
+window.loadDay = async function () {
+  const dateInput = document.getElementById('dateInput');
+  currentDate = new Date(dateInput.value);
 
-    const storageKey = `study_${dateInput.value}`;
-    
-    try {
-        const stored = localStorage.getItem(storageKey);
-        dayData = stored ? JSON.parse(stored) : {};
-    } catch (error) {
-        console.error('Error loading day data:', error);
-        dayData = {};
-    }
+  const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
 
-    renderTimetable(dayName);
-    loadExtraData();
-    setupExtraDataListeners();
-    updateStats();
-    renderQuickStats();
-    updateUpcomingClass();
-}
+  if (document.getElementById('dayInfo')) {
+    document.getElementById('dayInfo').textContent =
+      `${dayName}, ${currentDate.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      })}`;
+  }
+
+  try {
+    const ref = doc(db, "users", userId, "days", dateInput.value);
+    const snap = await getDoc(ref);
+
+    dayData = snap.exists() ? snap.data() : {};
+
+  } catch (error) {
+    console.error("Error loading day data from Firebase:", error);
+    dayData = {};
+  }
+
+  // 🔽 KEEP ALL EXISTING UI LOGIC
+  renderTimetable(dayName);
+  loadExtraData();
+  setupExtraDataListeners();
+  updateStats();
+  renderQuickStats();
+  updateUpcomingClass();
+};
+
 
 function renderTimetable(dayName) {
     const container = document.getElementById('timetableContainer');
@@ -2838,5 +2872,6 @@ window.verifyOTP = async function () {
 
 
 init();
+
 
 
