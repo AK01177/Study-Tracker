@@ -1073,7 +1073,7 @@ function searchContent(query) {
     return results;
 }
 
-function init() {
+window.init = function() {
     const dateInput = document.getElementById('dateInput');
     dateInput.value = currentDate.toISOString().split('T')[0];
     loadSubjectData();
@@ -1274,15 +1274,6 @@ function initializeSubjectData() {
         };
     });
     return data;
-}
-
-function saveSubjectData() {
-    try {
-        localStorage.setItem('subject_data', JSON.stringify(subjectData));
-    } catch (error) {
-        console.error('Failed to save subject data:', error);
-        alert('Failed to save data. Storage may be full.');
-    }
 }
 
 function renderSubjectCards() {
