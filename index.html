@@ -16,6 +16,32 @@
             </button>
         </div>
 
+        <div id="phoneLoginBox" style="margin-top: 15px;">
+          <input
+            type="tel"
+            id="phoneNumber"
+            placeholder="+91XXXXXXXXXX"
+            style="padding: 10px; width: 200px;"
+          />
+          <button class="btn btn-secondary" onclick="sendOTP()">
+            📲 Send OTP
+          </button>
+        
+          <div id="otpBox" style="margin-top: 10px; display: none;">
+            <input
+              type="text"
+              id="otpCode"
+              placeholder="Enter OTP"
+              style="padding: 10px; width: 150px;"
+            />
+            <button class="btn btn-primary" onclick="verifyOTP()">
+              ✅ Verify OTP
+            </button>
+          </div>
+        
+          <div id="recaptcha-container"></div>
+        </div>
+
         <div class="nav-tabs">
             <div class="nav-tab active" onclick="switchTab('daily')">📅 Daily Tracker</div>
             <div class="nav-tab" onclick="switchTab('timetable')">🗓️ Weekly Timetable</div>
@@ -329,6 +355,7 @@
     <script type="module" src="script.js"></script>
 </body>
 </html>
+
 
 
 
