@@ -2743,7 +2743,7 @@ window.clearAllData = function() {
 
 // 🔥 Firebase save functions (cloud storage)
 
-async function saveDayData(date, data) {
+window.saveDayData = async function(date, data) {
   if (!window.userId) return;
   await setDoc(
     doc(db, "users", userId, "days", date),
@@ -2751,7 +2751,7 @@ async function saveDayData(date, data) {
   );
 }
 
-async function saveSubjectData() {
+window.saveSubjectData = async function() {
   if (!window.userId) return;
   await setDoc(
     doc(db, "users", userId, "meta", "subjects"),
@@ -2759,7 +2759,7 @@ async function saveSubjectData() {
   );
 }
 
-async function saveTodoData() {
+window.saveTodoData = async function() {
   if (!window.userId) return;
   await setDoc(
     doc(db, "users", userId, "meta", "todos"),
@@ -2767,7 +2767,7 @@ async function saveTodoData() {
   );
 }
 
-async function saveCancelledData() {
+window.saveCancelledData = async function() {
   if (!window.userId) return;
   await setDoc(
     doc(db, "users", userId, "meta", "cancelled"),
@@ -2776,4 +2776,3 @@ async function saveCancelledData() {
 }
 
 init();
-
