@@ -2995,13 +2995,3 @@ window.verifyOTP = async function () {
     console.error(err);
   }
 };
-
-
-init();
-
-
-
-
-
-
-
