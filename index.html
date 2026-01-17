@@ -287,6 +287,43 @@
 
     <div class="save-indicator" id="saveIndicator">✓ Saved!</div>
 
-    <script src="script.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged }
+            from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyD74nKNUYPmbThJc8cNDUeDUWIFAFsxes8",
+            authDomain: "study-tracker-68b09.firebaseapp.com",
+            projectId: "study-tracker-68b09",
+            storageBucket: "study-tracker-68b09.firebasestorage.app",
+            messagingSenderId: "413325185958",
+            appId: "1:413325185958:web:2239b2ba1142b2ee15f567",
+            measurementId: "G-Y7XFN3543S"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+        window.auth = getAuth(app);
+        window.provider = new GoogleAuthProvider();
+
+        window.login = async () => {
+            await signInWithPopup(auth, Provider);
+        };
+
+        onAuthStateChanged(auth, user => {
+            if (user){
+                window.userId = user.uid;
+                console.log("Logged in:", user.email);
+                init();
+            } else {
+                login();
+            }
+        });
+        
+    </script>
+
+    <script type="module" src="script.js"></script>
 </body>
 </html>
