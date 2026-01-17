@@ -330,8 +330,9 @@
         };
 
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
         window.db = getFirestore(app);
-        window.auth = getAuth(app);
+        window.auth = auth;
         window.provider = new GoogleAuthProvider();
 
         window.login = async () => {
@@ -344,9 +345,13 @@
                 console.log("Logged in:", user.email);
                 document.getElementById("loginBtn").style.display = "none";
                 document.getElementById("phoneLoginBox").style.display = "none";
-                init();
+                await window.init();
             }
         });
+
+        window.login = async () => {
+            await signInWithPopup(auth, provider);
+        };
 
     </script>
 
@@ -355,6 +360,7 @@
     <div id="recaptcha-container"></div>
 </body>
 </html>
+
 
 
 
