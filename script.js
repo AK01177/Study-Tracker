@@ -1,4 +1,3 @@
-
 import {
   doc,
   setDoc,
@@ -308,11 +307,31 @@ function addDailyTodo(date, subject, task, studyHours = 0, topics = '', priority
         date: date
     };
 
+    // Save to daily list
     todoData.daily[date].push(todo);
+
+    // --- Create or link a subject-level todo for the same task & date ---
+    const subj = todo.subject || 'General';
+    if (!todoData[subj]) todoData[subj] = [];
+
+    // Try to find an existing subject todo with same task and due date
+    let subjectTodo = (todoData[subj] || []).find(t => t.task === task && (t.dueDate === date || (t.linkedDaily && t.linkedDaily.date === date)));
+
+    if (!subjectTodo) {
+        subjectTodo = addTodo(subj, task, priority, date);
+        // addTodo already saved, but ensure studyHours is synced
+        subjectTodo.studyHours = studyHours || 0;
+        saveTodoData();
+    }
+
+    // Link both items so they can stay in sync
+    todo.linkedSubjectId = subjectTodo.id;
+    subjectTodo.linkedDaily = { date, id: todo.id };
+
     saveTodoData();
     renderTodoSection();
     return todo;
-}
+} 
 
 window.toggleDailyTodo = function(date, todoId) {
     if (!todoData.daily || !todoData.daily[date]) return;
@@ -322,34 +341,56 @@ window.toggleDailyTodo = function(date, todoId) {
     todo.completed = !todo.completed;
     todo.completedAt = todo.completed ? new Date().toISOString() : null;
 
-    // If completing, optionally log study hours to subject
+    // If completing, optionally log study hours to subject (daily -> subjectData self-study)
     if (todo.completed && todo.studyHours > 0 && todo.subject) {
         const s = todo.subject || 'General';
         if (!subjectData[s]) subjectData[s] = { lectures: [], labs: [], selfStudyTopics: [], assignments: [] };
         if (!subjectData[s].selfStudyTopics) subjectData[s].selfStudyTopics = [];
 
-        const date = todo.date;
-        const existingStudy = subjectData[s].selfStudyTopics.find(st => st.date === date);
+        const d = todo.date;
+        const existingStudy = subjectData[s].selfStudyTopics.find(st => st.date === d);
         if (existingStudy) {
             existingStudy.hours += todo.studyHours;
             if (todo.task && !existingStudy.topics.includes(todo.task)) existingStudy.topics += ` | ${todo.task}`;
         } else {
-            subjectData[s].selfStudyTopics.push({ date, hours: todo.studyHours, topics: todo.task || '', resources: 'Daily Todo' });
+            subjectData[s].selfStudyTopics.push({ date: d, hours: todo.studyHours, topics: todo.task || '', resources: 'Daily Todo' });
         }
         saveSubjectData();
     }
 
+    // Sync completion status to linked subject-level todo (if present)
+    if (todo.linkedSubjectId) {
+        const subj = todo.subject || 'General';
+        const subjectList = todoData[subj] || [];
+        const linked = subjectList.find(t => t.id === todo.linkedSubjectId);
+        if (linked) {
+            linked.completed = todo.completed;
+            linked.completedAt = todo.completed ? todo.completedAt : null;
+        }
+    }
+
     saveTodoData();
     renderTodoSection();
-}
+} 
 
 window.deleteDailyTodo = function(date, todoId) {
     if (!todoData.daily || !todoData.daily[date]) return;
+    const todo = todoData.daily[date].find(t => t.id === todoId);
+    if (!todo) return;
+
+    // If linked to a subject-level todo, remove that too
+    if (todo.linkedSubjectId) {
+        const subj = todo.subject || 'General';
+        if (todoData[subj]) {
+            todoData[subj] = todoData[subj].filter(t => t.id !== todo.linkedSubjectId);
+        }
+    }
+
     todoData.daily[date] = todoData.daily[date].filter(t => t.id !== todoId);
     if (todoData.daily[date].length === 0) delete todoData.daily[date];
     saveTodoData();
     renderTodoSection();
-}
+} 
 
 function editDailyTodo(date, todoId, updates) {
     if (!todoData.daily || !todoData.daily[date]) return;
@@ -957,9 +998,12 @@ window.submitEditDailyTodo = function(oldDate, todoId) {
 
     if (!task) { alert('Please enter a task description!'); return; }
 
-    // Move between dates if changed
+    // Find the existing todo
     const todo = (todoData.daily && todoData.daily[oldDate]) ? todoData.daily[oldDate].find(t => t.id === todoId) : null;
     if (!todo) return;
+
+    const previousSubject = todo.subject || 'General';
+    const linkedId = todo.linkedSubjectId;
 
     // Remove from old date
     todoData.daily[oldDate] = todoData.daily[oldDate].filter(t => t.id !== todoId);
@@ -969,6 +1013,46 @@ window.submitEditDailyTodo = function(oldDate, todoId) {
     todo.task = task; todo.subject = subject; todo.studyHours = hours; todo.priority = priority; todo.date = date;
     if (!todoData.daily[date]) todoData.daily[date] = [];
     todoData.daily[date].push(todo);
+
+    // Sync/update linked subject-level todo if exists
+    if (linkedId) {
+        // Find linked todo across subjects
+        let found = null; let foundSubject = null;
+        Object.keys(todoData).forEach(k => {
+            if (k === 'daily') return;
+            const arr = todoData[k] || [];
+            const f = arr.find(t => t.id === linkedId);
+            if (f) { found = f; foundSubject = k; }
+        });
+
+        if (found) {
+            // If subject changed, move it to new subject list
+            if (foundSubject !== subject) {
+                todoData[foundSubject] = todoData[foundSubject].filter(t => t.id !== linkedId);
+                if (!todoData[subject]) todoData[subject] = [];
+                todoData[subject].push(found);
+            }
+            // Update fields
+            found.task = task;
+            found.priority = priority;
+            found.dueDate = date;
+            found.studyHours = hours;
+            found.linkedDaily = { date, id: todo.id };
+        }
+    } else {
+        // No link existed - attempt to find a matching subject todo to link, or create one
+        const subj = subject || 'General';
+        if (!todoData[subj]) todoData[subj] = [];
+        let existing = todoData[subj].find(t => t.task === task && t.dueDate === date);
+        if (!existing) {
+            existing = addTodo(subj, task, priority, date);
+            existing.studyHours = hours;
+            saveTodoData();
+        }
+        // Link both ways
+        todo.linkedSubjectId = existing.id;
+        existing.linkedDaily = { date, id: todo.id };
+    }
 
     saveTodoData(); closeDailyTodoModal(); renderTodoSection();
 }
