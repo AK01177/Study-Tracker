@@ -1,3 +1,4 @@
+
 import {
   doc,
   setDoc,
@@ -263,6 +264,7 @@ function initializeTodoData() {
         data[subject] = [];
     });
     data['General'] = []; // For general todos not tied to a subject
+    data.daily = {}; // Day-wise todos keyed by YYYY-MM-DD
     return data;
 }
 
@@ -286,6 +288,76 @@ function addTodo(subject, task, priority = 'medium', dueDate = null) {
     saveTodoData();
     renderTodoSection();
     return todo;
+}
+
+// --- Day-wise Todo Functions ---
+function addDailyTodo(date, subject, task, studyHours = 0, topics = '', priority = 'medium') {
+    if (!todoData.daily) todoData.daily = {};
+    if (!todoData.daily[date]) todoData.daily[date] = [];
+
+    const todo = {
+        id: Date.now() + Math.random(),
+        task: task,
+        subject: subject || 'General',
+        completed: false,
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+        priority: priority,
+        studyHours: studyHours,
+        topics: topics,
+        date: date
+    };
+
+    todoData.daily[date].push(todo);
+    saveTodoData();
+    renderTodoSection();
+    return todo;
+}
+
+window.toggleDailyTodo = function(date, todoId) {
+    if (!todoData.daily || !todoData.daily[date]) return;
+    const todo = todoData.daily[date].find(t => t.id === todoId);
+    if (!todo) return;
+
+    todo.completed = !todo.completed;
+    todo.completedAt = todo.completed ? new Date().toISOString() : null;
+
+    // If completing, optionally log study hours to subject
+    if (todo.completed && todo.studyHours > 0 && todo.subject) {
+        const s = todo.subject || 'General';
+        if (!subjectData[s]) subjectData[s] = { lectures: [], labs: [], selfStudyTopics: [], assignments: [] };
+        if (!subjectData[s].selfStudyTopics) subjectData[s].selfStudyTopics = [];
+
+        const date = todo.date;
+        const existingStudy = subjectData[s].selfStudyTopics.find(st => st.date === date);
+        if (existingStudy) {
+            existingStudy.hours += todo.studyHours;
+            if (todo.task && !existingStudy.topics.includes(todo.task)) existingStudy.topics += ` | ${todo.task}`;
+        } else {
+            subjectData[s].selfStudyTopics.push({ date, hours: todo.studyHours, topics: todo.task || '', resources: 'Daily Todo' });
+        }
+        saveSubjectData();
+    }
+
+    saveTodoData();
+    renderTodoSection();
+}
+
+window.deleteDailyTodo = function(date, todoId) {
+    if (!todoData.daily || !todoData.daily[date]) return;
+    todoData.daily[date] = todoData.daily[date].filter(t => t.id !== todoId);
+    if (todoData.daily[date].length === 0) delete todoData.daily[date];
+    saveTodoData();
+    renderTodoSection();
+}
+
+function editDailyTodo(date, todoId, updates) {
+    if (!todoData.daily || !todoData.daily[date]) return;
+    const todo = todoData.daily[date].find(t => t.id === todoId);
+    if (!todo) return;
+    Object.assign(todo, updates);
+    saveTodoData();
+    renderTodoSection();
 }
 
 window.toggleTodo = function(subject, todoId) {
@@ -347,17 +419,28 @@ function getTodoStats() {
     let completed = 0;
     let overdue = 0;
     const today = new Date().toISOString().split('T')[0];
-    
-    Object.values(todoData).forEach(todos => {
-        todos.forEach(todo => {
-            total++;
-            if (todo.completed) completed++;
-            if (todo.dueDate && todo.dueDate < today && !todo.completed) overdue++;
-        });
+
+    Object.keys(todoData).forEach(key => {
+        if (key === 'daily') {
+            Object.values(todoData.daily || {}).forEach(arr => {
+                arr.forEach(todo => {
+                    total++;
+                    if (todo.completed) completed++;
+                    // daily todos use 'date' as their day; treat overdue if date < today and not completed
+                    if (todo.date && todo.date < today && !todo.completed) overdue++;
+                });
+            });
+        } else {
+            todoData[key].forEach(todo => {
+                total++;
+                if (todo.completed) completed++;
+                if (todo.dueDate && todo.dueDate < today && !todo.completed) overdue++;
+            });
+        }
     });
-    
+
     return { total, completed, pending: total - completed, overdue };
-}
+} 
 
 function renderTodoSection() {
     const container = document.getElementById('todoContent');
@@ -365,6 +448,9 @@ function renderTodoSection() {
     
     const stats = getTodoStats();
     const today = new Date().toISOString().split('T')[0];
+    const prevDateElem = document.getElementById('dailyTodoDate');
+    const displayDate = prevDateElem ? prevDateElem.value : today;
+    const dailyList = (todoData.daily && todoData.daily[displayDate]) ? todoData.daily[displayDate] : []; 
     
     let html = `
         <div style="margin-bottom: 30px;">
@@ -393,7 +479,35 @@ function renderTodoSection() {
             </div>
         </div>
     `;
-    
+
+    // Day-wise Todos Header
+    html += `
+        <div style="margin-bottom: 20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <label style="font-weight:600; color: #667eea; margin-right:6px;">📅 Day-wise Todos:</label>
+                <input type="date" id="dailyTodoDate" value="${displayDate}" onchange="renderTodoSection()" style="padding:8px; border:1.5px solid var(--border-medium); border-radius: var(--radius-md);">
+                <button class="btn btn-primary" onclick="showAddDailyTodoModal(document.getElementById('dailyTodoDate').value)" style="padding:8px 12px;">➕ Add Day Todo</button>
+            </div>
+            <div style="margin-left: auto; color: var(--text-secondary);">Showing: <strong>${displayDate}</strong></div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            ${dailyList.length === 0 ? `<div style="color:#999;">No day-wise todos for ${displayDate}.</div>` : dailyList.map(todo => `
+                <div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px dashed var(--border-light);">
+                    <input type="checkbox" ${todo.completed ? 'checked' : ''} onchange="toggleDailyTodo('${displayDate}', ${todo.id})">
+                    <div style="flex:1;">
+                        <div style="font-weight:600;">${todo.task}</div>
+                        <div style="font-size:12px; color: var(--text-secondary);">Subject: ${todo.subject || 'General'} • Hours: ${todo.studyHours || 0} • Priority: ${todo.priority}</div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn btn-secondary" onclick="showEditDailyTodoModal('${displayDate}', ${todo.id})">Edit</button>
+                        <button class="btn btn-danger" onclick="deleteDailyTodo('${displayDate}', ${todo.id})">Delete</button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
     // Filter and sort controls
     html += `
         <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
@@ -719,16 +833,166 @@ window.submitEditTodo = function(oldSubject, todoId) {
     renderTodoSection();
 }
 
+// Day-wise Todo Modals and Handlers
+window.showAddDailyTodoModal = function(date = null) {
+    const modal = document.createElement('div');
+    modal.id = 'dailyTodoModal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;';
+
+    const today = new Date().toISOString().split('T')[0];
+    const d = date || today;
+
+    modal.innerHTML = `
+        <div style="background: white; padding: 30px; border-radius: var(--radius-lg); max-width: 560px; width: 100%; box-shadow: var(--shadow-2xl);">
+            <h3 style="margin: 0 0 20px 0; color: #667eea;">➕ Add Day-wise Todo</h3>
+            <div class="input-group">
+                <label>Date:</label>
+                <input type="date" id="dailyTodoDateInput" value="${d}" style="width:100%; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);">
+            </div>
+            <div class="input-group">
+                <label>Subject:</label>
+                <select id="dailyTodoSubject" style="width:100%; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);">
+                    ${Object.keys(subjects).map(s => `<option value="${s}">${s} - ${subjects[s].fullName}</option>`).join('')}
+                    <option value="General">General</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Task / Topics:</label>
+                <textarea id="dailyTodoTask" placeholder="What will you study today?" style="width:100%; min-height:80px; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);"></textarea>
+            </div>
+            <div class="input-group">
+                <label>Estimated Hours:</label>
+                <input type="number" id="dailyTodoHours" min="0" step="0.5" value="1" style="width:100%; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);">
+            </div>
+            <div class="input-group">
+                <label>Priority:</label>
+                <select id="dailyTodoPriority" style="width:100%; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                <button class="btn btn-secondary" onclick="closeDailyTodoModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitAddDailyTodo()">Add Day Todo</button>
+            </div>
+        </div>
+    `;
+
+    modal.onclick = (e) => { if (e.target === modal) closeDailyTodoModal(); };
+    document.body.appendChild(modal);
+    document.getElementById('dailyTodoTask').focus();
+}
+
+window.closeDailyTodoModal = function() { const modal = document.getElementById('dailyTodoModal'); if (modal) modal.remove(); }
+
+window.submitAddDailyTodo = function() {
+    const date = document.getElementById('dailyTodoDateInput').value;
+    const subject = document.getElementById('dailyTodoSubject').value;
+    const task = document.getElementById('dailyTodoTask').value.trim();
+    const hours = parseFloat(document.getElementById('dailyTodoHours').value) || 0;
+    const priority = document.getElementById('dailyTodoPriority').value || 'medium';
+
+    if (!task) { alert('Please enter a task description!'); return; }
+
+    addDailyTodo(date, subject, task, hours, task, priority);
+    closeDailyTodoModal();
+}
+
+window.showEditDailyTodoModal = function(date, todoId) {
+    const todo = (todoData.daily && todoData.daily[date]) ? todoData.daily[date].find(t => t.id === todoId) : null;
+    if (!todo) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'dailyTodoModal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;';
+
+    modal.innerHTML = `
+        <div style="background: white; padding: 30px; border-radius: var(--radius-lg); max-width: 560px; width: 100%; box-shadow: var(--shadow-2xl);">
+            <h3 style="margin: 0 0 20px 0; color: #667eea;">✏️ Edit Day-wise Todo</h3>
+            <div class="input-group">
+                <label>Date:</label>
+                <input type="date" id="dailyTodoDateInput" value="${todo.date}" style="width:100%; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);">
+            </div>
+            <div class="input-group">
+                <label>Subject:</label>
+                <select id="dailyTodoSubject" style="width:100%; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);">
+                    ${Object.keys(subjects).map(s => `<option value="${s}" ${s === todo.subject ? 'selected' : ''}>${s} - ${subjects[s].fullName}</option>`).join('')}
+                    <option value="General" ${todo.subject === 'General' ? 'selected' : ''}>General</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Task / Topics:</label>
+                <textarea id="dailyTodoTask" style="width:100%; min-height:80px; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);">${todo.task}</textarea>
+            </div>
+            <div class="input-group">
+                <label>Estimated Hours:</label>
+                <input type="number" id="dailyTodoHours" min="0" step="0.5" value="${todo.studyHours || 0}" style="width:100%; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);">
+            </div>
+            <div class="input-group">
+                <label>Priority:</label>
+                <select id="dailyTodoPriority" style="width:100%; padding:10px; border:1.5px solid var(--border-medium); border-radius:var(--radius-md);">
+                    <option value="low" ${todo.priority === 'low' ? 'selected' : ''}>Low</option>
+                    <option value="medium" ${todo.priority === 'medium' ? 'selected' : ''}>Medium</option>
+                    <option value="high" ${todo.priority === 'high' ? 'selected' : ''}>High</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                <button class="btn btn-secondary" onclick="closeDailyTodoModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitEditDailyTodo('${date}', ${todo.id})">Save Changes</button>
+            </div>
+        </div>
+    `;
+
+    modal.onclick = (e) => { if (e.target === modal) closeDailyTodoModal(); };
+    document.body.appendChild(modal);
+}
+
+window.submitEditDailyTodo = function(oldDate, todoId) {
+    const date = document.getElementById('dailyTodoDateInput').value;
+    const subject = document.getElementById('dailyTodoSubject').value;
+    const task = document.getElementById('dailyTodoTask').value.trim();
+    const hours = parseFloat(document.getElementById('dailyTodoHours').value) || 0;
+    const priority = document.getElementById('dailyTodoPriority').value || 'medium';
+
+    if (!task) { alert('Please enter a task description!'); return; }
+
+    // Move between dates if changed
+    const todo = (todoData.daily && todoData.daily[oldDate]) ? todoData.daily[oldDate].find(t => t.id === todoId) : null;
+    if (!todo) return;
+
+    // Remove from old date
+    todoData.daily[oldDate] = todoData.daily[oldDate].filter(t => t.id !== todoId);
+    if (!todoData.daily[oldDate] || todoData.daily[oldDate].length === 0) delete todoData.daily[oldDate];
+
+    // Update and add to new date
+    todo.task = task; todo.subject = subject; todo.studyHours = hours; todo.priority = priority; todo.date = date;
+    if (!todoData.daily[date]) todoData.daily[date] = [];
+    todoData.daily[date].push(todo);
+
+    saveTodoData(); closeDailyTodoModal(); renderTodoSection();
+}
+
+
 // Bulk delete completed todos
 window.deleteCompletedTodos = function() {
     const confirmDelete = confirm('Are you sure you want to delete all completed todos? This action cannot be undone.');
     if (!confirmDelete) return;
     
     let deletedCount = 0;
-    Object.keys(todoData).forEach(subject => {
-        const initialLength = todoData[subject].length;
-        todoData[subject] = todoData[subject].filter(todo => !todo.completed);
-        deletedCount += initialLength - todoData[subject].length;
+    Object.keys(todoData).forEach(key => {
+        if (key === 'daily') {
+            Object.keys(todoData.daily || {}).forEach(date => {
+                const initial = todoData.daily[date].length;
+                todoData.daily[date] = todoData.daily[date].filter(t => !t.completed);
+                deletedCount += initial - todoData.daily[date].length;
+                if (todoData.daily[date].length === 0) delete todoData.daily[date];
+            });
+        } else {
+            const initialLength = todoData[key].length;
+            todoData[key] = todoData[key].filter(todo => !todo.completed);
+            deletedCount += initialLength - todoData[key].length;
+        }
     });
     
     saveTodoData();
@@ -1586,6 +1850,10 @@ window.showSubjectDetail = function(subject) {
                     <div class="stat-value">${data.labs.length}</div>
                 </div>
                 <div class="stat-card">
+                    <h4>Attended Labs</h4>
+                    <div class="stat-value">${data.labs.filter(l => l.attended).length}</div>
+                </div>
+                <div class="stat-card">
                     <h4>Completed Labs</h4>
                     <div class="stat-value">${data.labs.filter(l => l.completed).length}</div>
                 </div>
@@ -1647,13 +1915,19 @@ window.showSubjectDetail = function(subject) {
         html += '<p style="color: #999;">No labs recorded yet. Click "Add Lab" to start tracking.</p>';
     } else {
         data.labs.forEach((lab, index) => {
-            const statusClass = lab.completed ? 'status-attended' : 'status-pending';
+            const attendedClass = lab.attended ? 'status-attended' : 'status-missed';
+            const attendedText = lab.attended ? 'Attended' : 'Missed';
+            const completedClass = lab.completed ? 'status-attended' : 'status-pending';
+            const completedText = lab.completed ? 'Completed' : 'Pending';
             
             html += `
                 <div class="lecture-item ${lab.completed ? 'completed' : ''}">
                     <div class="lecture-header">
                         <div class="lecture-title">Lab ${index + 1} - ${lab.date} ${lab.time ? `(${lab.time})` : ''}</div>
-                        <div class="lecture-status ${statusClass}">${lab.completed ? 'Completed' : 'Pending'}</div>
+                        <div style="display: flex; gap: 10px;">
+                            <div class="lecture-status ${attendedClass}">${attendedText}</div>
+                            <div class="lecture-status ${completedClass}">${completedText}</div>
+                        </div>
                     </div>
                     <div style="margin-top: 10px;"><strong>Experiment/Topic:</strong> ${lab.experiment || 'Not recorded'}</div>
                     ${lab.assignment ? `<div style="margin-top: 10px;"><strong>Assignments:</strong> ${lab.assignment}</div>` : ''}
@@ -2088,23 +2362,41 @@ window.markAttendance = function(index, status) {
     const schedule = timetable[dayName] || [];
     const slot = schedule[index];
     
-    if (slot && !slot.isFree && !slot.isLab) {
-        // Update subject lecture attendance
-        const subject = slot.subject.replace(' (Extra by Prof)', '').trim();
+    if (slot && !slot.isFree) {
         const date = currentDate.toISOString().split('T')[0];
         const time = slot.time;
         
-        if (!subjectData[subject]) subjectData[subject] = { lectures: [], labs: [], selfStudyTopics: [], assignments: [] };
-        if (!subjectData[subject].lectures) subjectData[subject].lectures = [];
-        
-        let lecture = subjectData[subject].lectures.find(l => l.date === date && l.time === time);
-        if (!lecture) {
-            lecture = { date, time, subject, topics: '', notes: '', attended: status === 'present' };
-            subjectData[subject].lectures.push(lecture);
+        if (slot.isLab) {
+            // Update subject lab attendance
+            const subject = slot.labSubject || slot.subject.replace(' Lab', '').trim();
+            
+            if (!subjectData[subject]) subjectData[subject] = { lectures: [], labs: [], selfStudyTopics: [], assignments: [] };
+            if (!subjectData[subject].labs) subjectData[subject].labs = [];
+            
+            let lab = subjectData[subject].labs.find(l => l.date === date && l.time === time);
+            if (!lab) {
+                lab = { date, time, experiment: '', completed: false, assignment: '', notes: '', attended: status === 'present' };
+                subjectData[subject].labs.push(lab);
+            } else {
+                lab.attended = status === 'present';
+            }
+            saveSubjectData();
         } else {
-            lecture.attended = status === 'present';
+            // Update subject lecture attendance
+            const subject = slot.subject.replace(' (Extra by Prof)', '').trim();
+            
+            if (!subjectData[subject]) subjectData[subject] = { lectures: [], labs: [], selfStudyTopics: [], assignments: [] };
+            if (!subjectData[subject].lectures) subjectData[subject].lectures = [];
+            
+            let lecture = subjectData[subject].lectures.find(l => l.date === date && l.time === time);
+            if (!lecture) {
+                lecture = { date, time, subject, topics: '', notes: '', attended: status === 'present' };
+                subjectData[subject].lectures.push(lecture);
+            } else {
+                lecture.attended = status === 'present';
+            }
+            saveSubjectData();
         }
-        saveSubjectData();
     }
     
     renderTimetable(dayName);
