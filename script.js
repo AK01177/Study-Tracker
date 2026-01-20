@@ -1,3 +1,4 @@
+
 import {
   doc,
   setDoc,
@@ -497,7 +498,10 @@ function renderTodoSection() {
         <div style="margin-bottom: 30px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                 <h2 style="color: #667eea; margin: 0;">📝 Self-Study Todo List</h2>
-                <button class="btn btn-primary" onclick="showAddTodoModal()" style="padding: 10px 20px;">➕ Add New Todo</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-primary" onclick="showAddTodoModal()" style="padding: 10px 20px;">➕ Add New Todo</button>
+                    <button class="btn btn-secondary" onclick="showAddDailyTodoModal()" style="padding: 10px 20px;">📅 Add Day Todo</button>
+                </div>
             </div>
             
             <div class="stats-grid" style="margin-bottom: 30px;">
@@ -521,33 +525,7 @@ function renderTodoSection() {
         </div>
     `;
 
-    // Day-wise Todos Header
-    html += `
-        <div style="margin-bottom: 20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                <label style="font-weight:600; color: #667eea; margin-right:6px;">📅 Day-wise Todos:</label>
-                <input type="date" id="dailyTodoDate" value="${displayDate}" onchange="renderTodoSection()" style="padding:8px; border:1.5px solid var(--border-medium); border-radius: var(--radius-md);">
-                <button class="btn btn-primary" onclick="showAddDailyTodoModal(document.getElementById('dailyTodoDate').value)" style="padding:8px 12px;">➕ Add Day Todo</button>
-            </div>
-            <div style="margin-left: auto; color: var(--text-secondary);">Showing: <strong>${displayDate}</strong></div>
-        </div>
 
-        <div style="margin-bottom: 20px;">
-            ${dailyList.length === 0 ? `<div style="color:#999;">No day-wise todos for ${displayDate}.</div>` : dailyList.map(todo => `
-                <div style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px dashed var(--border-light);">
-                    <input type="checkbox" ${todo.completed ? 'checked' : ''} onchange="toggleDailyTodo('${displayDate}', ${todo.id})">
-                    <div style="flex:1;">
-                        <div style="font-weight:600;">${todo.task}</div>
-                        <div style="font-size:12px; color: var(--text-secondary);">Subject: ${todo.subject || 'General'} • Hours: ${todo.studyHours || 0} • Priority: ${todo.priority}</div>
-                    </div>
-                    <div style="display:flex; gap:6px;">
-                        <button class="btn btn-secondary" onclick="showEditDailyTodoModal('${displayDate}', ${todo.id})">Edit</button>
-                        <button class="btn btn-danger" onclick="deleteDailyTodo('${displayDate}', ${todo.id})">Delete</button>
-                    </div>
-                </div>
-            `).join('')}
-        </div>
-    `;
 
     // Filter and sort controls
     html += `
